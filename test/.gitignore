@@ -1,0 +1,5 @@
+dsss_objs/
+dsss.last
+test
+*.dylib
+*.o
