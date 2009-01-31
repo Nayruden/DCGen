@@ -6,6 +6,9 @@ import tango.io.Stdout;
 alias Document!(char) Doc;
 alias Doc.Node Node;
 
+const overrideAttribute = `gccxml(override)`;
+const inheritAttribute = `gccxml(inherit)`;
+
 alias bool delegate( Node node ) filterDelegate;
 
 class FilterByID
@@ -19,7 +22,7 @@ class FilterByID
 	
 	public bool filter( Node node )
 	{
-		if ( !node.hasAttribute( "id" ) || node.getAttribute( "id" ).value != id )
+		if ( !hasAttributeAndEqualTo( node, "id", id ) )
 			return false;
 		return true;
 	}
@@ -52,4 +55,12 @@ char[] typeNodeToString( in Node node )
 Node getNodeByID( Doc doc, char[] id )
 {
 	return doc.query.child.child.filter( filterByID( id ) ).nodes[0];
+}
+
+bool hasAttributeAndEqualTo( Node node, char[] attribute, char[] desired )
+{
+	if ( node.hasAttribute( attribute ) && node.getAttribute( attribute ).value == desired )
+		return true;
+		
+	return false;
 }

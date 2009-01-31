@@ -48,8 +48,8 @@ extern "C" void {0}_destroy( {0} *cPtr )
 
 const classMethodsDeclD =
 `typedef void* C{0};
-extern ( C ) 
-{{ // TODO: Can this be private?
+private extern ( C ) 
+{{
 	C{0} {0}_create();
 	void {0}_destroy( C{0} cPtr );
 `;
@@ -77,31 +77,50 @@ const classDfnDEnd =
 class Clazz
 {
 	Node classNode;
-	Node[] memberNodes;
+	Method[] methods;
+	bool needsReflection = false;
 	
 	this( Node classNode )
 	{
 		this.classNode = classNode;
 		
 		auto doc = classNode.document;
+		
+		Node[] memberNodes;
 	
 		auto members = classNode.getAttribute( "members" ).value;
 		foreach( member; split( members, " " ) ) {
 			if ( trim( member ) == "" )
 				continue;
 		
-			auto set = doc.query.child.child.filter( filterByID( member.dup ) ).filter (
-				delegate( Node node ) { 					
-					if ( node.hasAttribute( "artificial" ) && node.getAttribute( "artificial" ).value == "1" )
-						return false;
-				
-					return true;
-				}
-			);
+			auto set = doc.query.child.child.filter( filterByID( member ) );
 			
-			if ( set.nodes.length > 0 ) {
+			auto node = set.nodes[ 0 ];
+			if ( !hasAttributeAndEqualTo( node, "artificial", "1" ) ) // Not interested in compiler generated functions (yet, TODO)
 				memberNodes ~= set.nodes[ 0 ];
-			}
+		}
+		
+		
+		foreach( memberNode; memberNodes ) {
+			switch ( memberNode.name ) {
+			case "Field":
+				// TODO
+				break;
+				
+			case "Method":
+				if ( hasAttributeAndEqualTo( memberNode, "access", "private" ) ) // Can't do any wrapping here
+					break;
+					
+				auto method = new Method( classNode, memberNode );
+				if ( method.needsReflection == true )
+					needsReflection = true;
+				methods ~= method;
+				break;
+				
+			default:
+				assert( false, "I don't know what this is!" );
+				break;
+			} 
 		}		
 	}
 	
@@ -109,21 +128,8 @@ class Clazz
 	{
 		char[] classDfn = format( classMethodsDfnC ) ~ "\n";
 		
-		foreach( memberNode; memberNodes ) {
-			switch ( memberNode.name ) {
-			case "Field":
-				// Stdout.formatln( "This is a field!" );
-				break;
-				
-			case "Method":
-				auto method = new Method( classNode, memberNode );
-				classDfn ~= method.cMethodDfn() ~ "\n";
-				break;
-				
-			default:
-				assert( false, "I don't know what this is!" );
-				break;
-			} 
+		foreach( method; methods ) {
+			classDfn ~= method.cMethodDfn() ~ "\n";
 		}
 		
 		return classDfn;
@@ -131,46 +137,16 @@ class Clazz
 	
 	public char[] dClassDfn()
 	{
-		char[] classDfn = format( classMethodsDeclD ) ~ "\n";
+		char[] classDfn = format( classMethodsDeclD );
 		
-		foreach( memberNode; memberNodes ) {
-			// Stdout( member ~ "\n" );
-			// Stdout.formatln( "{} {}", memberNode.name, memberNode.getAttribute( "name" ).value );
-			switch ( memberNode.name ) {
-			case "Field":
-				// Stdout.formatln( "This is a field!" );
-				break;
-				
-			case "Method":
-				auto method = new Method( classNode, memberNode );
-				classDfn ~= method.dMethodDecl() ~ "\n";
-				break;
-				
-			default:
-				assert( false, "I don't know what this is!" );
-				break;
-			}
+		foreach( method; methods ) {
+			classDfn ~= method.dMethodDecl();
 		}
 		
-		classDfn ~= "}\n\n" ~ format( classDfnDStart );
+		classDfn ~= "}\n\n" ~ format( classDfnDStart ) ~ "\n";
 		
-		foreach( memberNode; memberNodes ) {
-			// Stdout( member ~ "\n" );
-			// Stdout.formatln( "{} {}", memberNode.name, memberNode.getAttribute( "name" ).value );
-			switch ( memberNode.name ) {
-			case "Field":
-				// Stdout.formatln( "This is a field!" );
-				break;
-				
-			case "Method":
-				auto method = new Method( classNode, memberNode );
-				classDfn ~= method.dMethodDfn();
-				break;
-				
-			default:
-				assert( false, "I don't know what this is!" );
-				break;
-			}
+		foreach( method; methods ) {
+			classDfn ~= method.dMethodDfn() ~ "\n";
 		}
 		
 		classDfn ~= format( classDfnDEnd );

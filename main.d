@@ -10,7 +10,7 @@ void main()
 {
 	char[] raw_text;
 	
-	auto fc = new FileConduit( "out2.xml" );
+	auto fc = new FileConduit( "test/out.xml" );
 	raw_text.length = fc.length;
 	fc.read( raw_text );
 	

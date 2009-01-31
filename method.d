@@ -3,6 +3,7 @@ module dcgen.method;
 import defines;
 import tango.io.Stdout;
 import tango.text.convert.Format;
+import tango.text.Util;
 
 // 0 = Class name
 // 1 = Function name unmangled
@@ -12,7 +13,7 @@ import tango.text.convert.Format;
 // 5 = Pass to func
 // 6 = Return?
 const methodDfnC = 
-`extern "C" {3} dcgen_{2}( C{0} cPtr{4} )
+`extern "C" {3} dcgen_{2}( {0} *cPtr{4} )
 {{
 	assert( cPtr != NULL );
 	{6}cPtr->{1}( {5} );
@@ -20,14 +21,14 @@ const methodDfnC =
 `;
 
 const methodDeclD = 
-`	{3} dcgen_{2}( {0} *cPtr{4} );
+`	{3} dcgen_{2}( C{0} cPtr{4} );
 `;
 
 const methodDfnD = 
 `	{3} {1}( {4} )
 	{{
 		assert( cPtr != null );
-		{6}dcgen_{2}( cPtr, {5} );
+		{6}dcgen_{2}( cPtr{5} );
 	}
 `;
 
@@ -39,6 +40,10 @@ class Method
 	       argStr,  // The arguments, IE "int i, char c, Foo bar"
 	       passStr; // The pass string, IE "i, c, bar"
 	
+	bool isOverridable = false,
+	     isProtected = false,
+	     needsReflection = false;
+	
 	this( Node classNode, Node methodNode )
 	{
 		this.classNode = classNode;
@@ -48,6 +53,17 @@ class Method
 		returnType = typeNodeToString( returnNode );
 		argStr = argString( methodNode );
 		passStr = passString( methodNode );
+		
+		if ( hasAttributeAndEqualTo( methodNode, "virtual", "1" ) &&
+		     methodNode.hasAttribute( "attributes" ) && containsPattern( methodNode.getAttribute( "attributes" ).value, overrideAttribute ) ) {
+			isOverridable = true;
+			needsReflection = true;
+		}
+		
+		if ( methodNode.getAttribute( "access" ).value == "protected" ) {
+			isProtected = true;
+			needsReflection = true;
+		}
 	}
 	
 	public char[] cMethodDfn()
@@ -62,22 +78,26 @@ class Method
 	
 	public char[] dMethodDfn()
 	{
-		return format( methodDfnD, false );
+		return format( methodDfnD, false, true );
 	}
 	
-	private char[] format( char[] formatStr, bool commaOnArgs=true )
+	private char[] format( char[] formatStr, bool commaOnArgs=true, bool commaOnPass=false )
 	{
 		auto args = argStr;
-		if ( commaOnArgs )
-			args = ", " ~ args;
+		if ( args.length > 0 && commaOnArgs )
+			args = ", " ~ argStr.dup;
+			
+		auto pass = passStr;
+		if ( pass.length > 0 && commaOnPass )
+			pass = ", " ~ passStr.dup;
 			
 		return Format( formatStr,
 			classNode.getAttribute( "name" ).value,        // 0 = Class name
 			methodNode.getAttribute( "name" ).value,       // 1 = Function name unmangled
-			classNode.getAttribute( "mangled" ).value,     // 2 = Function name mangled
+			methodNode.getAttribute( "mangled" ).value,    // 2 = Function name mangled
 			returnType,                                    // 3 = Return type
 			args,                                          // 4 = Args
-			passStr,                                       // 5 = Pass to func
+			pass,                                          // 5 = Pass to func
 			returnType == "void" ? "" : "return "          // 6 = Return?
 		);
 	}
