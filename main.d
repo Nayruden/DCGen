@@ -3,13 +3,18 @@ module dcgen.main;
 import defines;
 import tango.io.device.FileConduit;
 import tango.io.Stdout;
+import tango.util.Arguments;
+// import file;
 import clazz;
 
 
-void main()
+void main( char[][] commandLine )
 {
-	char[] raw_text;
+	// auto args = new Arguments( commandLine[ 1 .. $ ] );
+	// args.define( "x" ).required;
 	
+	char[] raw_text;
+		
 	auto fc = new FileConduit( "test/out.xml" );
 	raw_text.length = fc.length;
 	fc.read( raw_text );

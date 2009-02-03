@@ -5,136 +5,176 @@ import tango.io.Stdout;
 import tango.text.convert.Format;
 import tango.text.Util;
 
-// 0 = Class name
-// 1 = Function name unmangled
-// 2 = Function name mangled
-// 3 = Return type
-// 4 = Args
-// 5 = Pass to func
-// 6 = Return?
-const methodDfnC = 
+
+// // This is only used for instances where it's needed... either a virtual function or a protected function
+// const r_methodDfnC = 
+// `	virtual {3} {1}( {4} )
+// {{
+// 	
+// }
+// 
+// virtual void createScene()
+// {
+// 	if ( createSceneD == NULL )
+// 		return;
+// 
+// 	assert( implD != NULL );
+// 	(*createSceneD)( implD );
+// }
+// `;
+
+class Method
+{
+	Node class_node, 
+	     method_node;
+	
+	char[] return_type,             // The return type of the method, IE "void"
+	       func_args_and_types,     // The arguments, IE "int i, char c, Foo bar"
+	       func_args,               // The pass string, IE "i, c, bar"
+	       class_name,              // The name of the class this method belongs to
+	       method_name,             // The name of this method
+	       method_name_mangled;     // The mangled name of this method
+	
+	bool is_virtual = false,        // Virtual from the C++-side
+	     is_protected = false,      // Protected access from the C++-side
+	     needs_inheritance = false; // We need to allow inheritance of this class from the D-side
+	
+	this( Node class_node, Node method_node )
+	{
+		this.class_node = class_node;
+		this.method_node = method_node;
+
+		auto return_type_node = getNodeByID( method_node.document, getNodeAttribute( method_node, "returns" ) );
+		return_type = typeNodeToString( return_type_node );
+		generateArgsAndTypes(); // Creates our func_args* strings
+		
+		class_name = getNodeAttribute( class_node, "name" );
+		method_name = getNodeAttribute( method_node, "name" );
+		method_name_mangled = getNodeAttribute( method_node, "mangled" );
+		
+		if ( hasAttributeAndEqualTo( method_node, "virtual", "1" ) &&
+		     method_node.hasAttribute( "attributes" ) && containsPattern( getNodeAttribute( method_node, "attributes" ), overrideAttribute ) ) {
+			is_virtual = true;
+			needs_inheritance = true;
+		}
+		
+		if ( hasAttributeAndEqualTo( method_node, "access", "protected" ) ) {
+			is_protected = true;
+			needs_inheritance = true;
+		}
+	}
+	
+//////////////////////////////generateArgsAndTypes////////////////////
+	
+	private void generateArgsAndTypes()
+	{
+		if ( !method_node.hasChildren )
+			return;
+			
+		func_args_and_types = "";
+		func_args = "";
+			
+		foreach( child; method_node.children ) {
+			if ( child.name == null )
+				continue;
+				
+			auto type_node = getNodeByID( method_node.document, getNodeAttribute( child, "type" ) );
+			auto type = typeNodeToString( type_node );
+			auto name = getNodeAttribute( child, "name" );
+			
+			func_args_and_types ~= type ~ " " ~ name ~ ", ";
+			func_args ~= name ~ ", ";
+		}
+		
+		// Cut off the ", " at the end of both
+		func_args_and_types = func_args_and_types[ 0 .. $-2 ]; 
+		func_args = func_args[ 0 .. $-2 ];
+	}
+	
+//////////////////////////////cInterfaceDefinition////////////////////
+
+	// 0 = Class name
+	// 1 = Function name unmangled
+	// 2 = Function name mangled
+	// 3 = Return type
+	// 4 = Args
+	// 5 = Pass to func
+	// 6 = Return?
+	private const c_interface_defintion_layout = 
 `extern "C" {3} dcgen_{2}( {0} *cPtr{4} )
 {{
 	assert( cPtr != NULL );
 	{6}cPtr->{1}( {5} );
-}
-`;
+}`;
 
-const methodDeclD = 
-`	{3} dcgen_{2}( C{0} cPtr{4} );
-`;
+	
+	public char[] cInterfaceDefinition()
+	{
+		auto args = func_args_and_types;
+		if ( args != null )
+			args = ", " ~ func_args_and_types.dup;
 
-const methodDfnD = 
-`	{3} {1}( {4} )
-	{{
-		assert( cPtr != null );
-		{6}dcgen_{2}( cPtr{5} );
+		return Format( c_interface_defintion_layout,
+			class_name,
+			method_name,
+			method_name_mangled,
+			return_type,
+			args,
+			func_args,
+			return_type == "void" ? "" : "return "
+		 );
 	}
-`;
 
-class Method
-{
-	Node classNode, methodNode;
+//////////////////////////////cInterfaceDeclaration///////////////////
 	
-	char[] returnType,
-	       argStr,  // The arguments, IE "int i, char c, Foo bar"
-	       passStr; // The pass string, IE "i, c, bar"
+	// 0 = Class name
+	// 1 = Function name mangled
+	// 2 = Return type
+	// 3 = Args
+	private const c_interface_declaration_layout = `	{2} dcgen_{1}( C{0} cPtr{3} );`;
 	
-	bool isOverridable = false,
-	     isProtected = false,
-	     needsReflection = false;
-	
-	this( Node classNode, Node methodNode )
+	public char[] cInterfaceDeclaration()
 	{
-		this.classNode = classNode;
-		this.methodNode = methodNode;
+		auto args = func_args_and_types;
+		if ( args != null )
+			args = ", " ~ func_args_and_types.dup;
 		
-		auto returnNode = getNodeByID( methodNode.document, methodNode.getAttribute( "returns" ).value );
-		returnType = typeNodeToString( returnNode );
-		argStr = argString( methodNode );
-		passStr = passString( methodNode );
-		
-		if ( hasAttributeAndEqualTo( methodNode, "virtual", "1" ) &&
-		     methodNode.hasAttribute( "attributes" ) && containsPattern( methodNode.getAttribute( "attributes" ).value, overrideAttribute ) ) {
-			isOverridable = true;
-			needsReflection = true;
-		}
-		
-		if ( methodNode.getAttribute( "access" ).value == "protected" ) {
-			isProtected = true;
-			needsReflection = true;
-		}
-	}
-	
-	public char[] cMethodDfn()
-	{		
-		return format( methodDfnC );
-	}
-	
-	public char[] dMethodDecl()
-	{
-		return format( methodDeclD );
-	}
-	
-	public char[] dMethodDfn()
-	{
-		return format( methodDfnD, false, true );
-	}
-	
-	private char[] format( char[] formatStr, bool commaOnArgs=true, bool commaOnPass=false )
-	{
-		auto args = argStr;
-		if ( args.length > 0 && commaOnArgs )
-			args = ", " ~ argStr.dup;
-			
-		auto pass = passStr;
-		if ( pass.length > 0 && commaOnPass )
-			pass = ", " ~ passStr.dup;
-			
-		return Format( formatStr,
-			classNode.getAttribute( "name" ).value,        // 0 = Class name
-			methodNode.getAttribute( "name" ).value,       // 1 = Function name unmangled
-			methodNode.getAttribute( "mangled" ).value,    // 2 = Function name mangled
-			returnType,                                    // 3 = Return type
-			args,                                          // 4 = Args
-			pass,                                          // 5 = Pass to func
-			returnType == "void" ? "" : "return "          // 6 = Return?
+		return Format( c_interface_declaration_layout,
+			class_name,
+			method_name_mangled,
+			return_type,
+			args
 		);
 	}
 	
-	private char[] argString( Node methodNode )
-	{
-		if ( !methodNode.hasChildren )
-			return null;
-			
-		char[] str;
-			
-		foreach( child; methodNode.children ) {
-			if ( child.name == null )
-				continue;
-				
-			auto typeNode = getNodeByID( methodNode.document, child.getAttribute( "type" ).value );
-			auto type = typeNodeToString( typeNode );
-			auto name = child.getAttribute( "name" ).value;
-			str ~= type ~ " " ~ name ~ ", ";
-		}
-		return str[ 0 .. $-2 ];
-	}
+//////////////////////////////dClassMethod////////////////////////////
+
+	// 0 = Function name unmangled
+	// 1 = Function name mangled
+	// 2 = Return type
+	// 3 = Args
+	// 4 = Pass to func
+	// 5 = Return?	
+	private const d_class_method_layout = 
+`	{2} {0}( {3} )
+	{{
+		assert( cPtr != null );
+		{5}dcgen_{1}( cPtr{4} );
+	}`;
 	
-	char[] passString( Node methodNode )
+	public char[] dClassMethod()
 	{
-		if ( !methodNode.hasChildren )
-			return null;
+		auto pass = func_args;
+		if ( pass != null )
+			pass = ", " ~ func_args.dup;
 			
-		char[] str;
-			
-		foreach( child; methodNode.children ) {
-			if ( child.name == null )
-				continue;
-				
-			auto name = child.getAttribute( "name" ).value;
-			str ~= name ~ ", ";
-		}
-		return str[ 0 .. $-2 ]; // Cut off the ", " at the end
+		return Format( d_class_method_layout,
+			method_name,
+			method_name_mangled,
+			return_type,
+			func_args_and_types,
+			pass,
+			return_type == "void" ? "" : "return "
+		 );
 	}
 }

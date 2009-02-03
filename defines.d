@@ -57,9 +57,15 @@ Node getNodeByID( Doc doc, char[] id )
 	return doc.query.child.child.filter( filterByID( id ) ).nodes[0];
 }
 
+char[] getNodeAttribute( Node node, char[] attribute )
+{
+	// TODO, error checking
+	return node.getAttribute( attribute ).value;
+}
+
 bool hasAttributeAndEqualTo( Node node, char[] attribute, char[] desired )
 {
-	if ( node.hasAttribute( attribute ) && node.getAttribute( attribute ).value == desired )
+	if ( node.hasAttribute( attribute ) && getNodeAttribute( node, attribute ) == desired )
 		return true;
 		
 	return false;
