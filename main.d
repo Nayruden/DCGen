@@ -1,34 +1,46 @@
 module dcgen.main;
 
 import defines;
-import tango.io.device.FileConduit;
+import tango.io.FileConduit;
 import tango.io.Stdout;
 import tango.util.Arguments;
-// import file;
-import clazz;
+import dcgfile;
 
 
-void main( char[][] commandLine )
+int main( char[][] commandLine )
 {
-	// auto args = new Arguments( commandLine[ 1 .. $ ] );
-	// args.define( "x" ).required;
+	Config config;
+    
+	auto args = new Arguments();
+	args.parse( commandLine[ 1 .. $ ] );
+	auto filepath = args[ null ];
 	
-	char[] raw_text;
-		
-	auto fc = new FileConduit( "test/out.xml" );
+	if ( filepath.length == 0 ) {
+		printHelp();
+		return 1;
+	}
+	
+	char[] raw_text;		
+	auto fc = new FileConduit( filepath );
 	raw_text.length = fc.length;
 	fc.read( raw_text );
 	
 	auto doc = new Doc;
 	doc.parse( raw_text );
 	
-	auto cppOut = new FileConduit ( "test.cpp", FileConduit.WriteCreate );
-	auto dOut = new FileConduit ( "test.d", FileConduit.WriteCreate );
-	
-	foreach( node; doc.trunk.query[ "Class" ] )
+	// auto set = doc.trunk.query[ "Class" ].dup;
+	auto set = doc.query.child[ "Class" ].dup;
+	foreach( class_node; set )
 	{
-		Clazz clazz = new Clazz( node );
-		cppOut.write( clazz.cClassDfn() );
-		dOut.write( clazz.dClassDfn() );
+		auto file = new DCGFile( class_node, config );
+		file.createDFile();
+		file.createCFile();
 	}
+	
+	return 0;
+}
+
+void printHelp()
+{
+	Stdout( "Usage: dcgen <filepath>" ).newline;
 }
