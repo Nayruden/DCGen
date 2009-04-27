@@ -1,4 +1,4 @@
-module dcgen.method;
+module dcgen.dcgmethod;
 
 import defines;
 import tango.io.Stdout;
@@ -23,7 +23,7 @@ import tango.text.Util;
 // }
 // `;
 
-class Method
+class DCGMethod
 {
 	Node class_node, 
 	     method_node;
@@ -37,9 +37,9 @@ class Method
 	
 	bool is_virtual = false,        // Virtual from the C++-side
 	     is_protected = false,      // Protected access from the C++-side
-	     needs_inheritance = false; // We need to allow inheritance of this class from the D-side
+	     needs_expansion = false; // We need to allow inheritance of this class from the D-side
 	
-	this( Node class_node, Node method_node )
+	this( Node class_node, Node method_node, Config config )
 	{
 		this.class_node = class_node;
 		this.method_node = method_node;
@@ -55,12 +55,12 @@ class Method
 		if ( hasAttributeAndEqualTo( method_node, "virtual", "1" ) &&
 		     method_node.hasAttribute( "attributes" ) && containsPattern( getNodeAttribute( method_node, "attributes" ), overrideAttribute ) ) {
 			is_virtual = true;
-			needs_inheritance = true;
+			needs_expansion = true;
 		}
 		
 		if ( hasAttributeAndEqualTo( method_node, "access", "protected" ) ) {
 			is_protected = true;
-			needs_inheritance = true;
+			needs_expansion = true;
 		}
 	}
 	
@@ -97,7 +97,7 @@ class Method
 	// 1 = Function name unmangled
 	// 2 = Function name mangled
 	// 3 = Return type
-	// 4 = Args
+	// 4 = Args w/comma
 	// 5 = Pass to func
 	// 6 = Return?
 	private const c_interface_defintion_layout = 
@@ -122,6 +122,94 @@ class Method
 			args,
 			func_args,
 			return_type == "void" ? "" : "return "
+		 );
+	}
+	
+//////////////////////////////cExpandedInterfaceDefinition////////////
+
+	// 0 = Class name
+	// 1 = Function name unmangled
+	// 2 = Return type
+	// 3 = Args w/comma
+	// 4 = Args w/o comma
+	// 5 = Pass to func w/comma
+	// 6 = Return?
+	private const c_expanded_interface_definition_layout = 
+`	D_{1}_functype D_{1};
+
+	virtual {2} {1}( {4} )
+	{{
+		if ( D_{1} == NULL )
+			return;
+
+		assert( implD != NULL );
+		{6}(*D_{1})( implD{5} );
+	}
+	friend {2} {0}_set_{1}( {0}_wrapper *wrapperPtr, D_{1}_functype funcPtr );`;
+
+
+	public char[] cExpandedInterfaceDefinition()
+	{
+		auto args = func_args_and_types;
+		if ( args != null )
+			args = ", " ~ func_args_and_types.dup;
+
+		return Format( c_expanded_interface_definition_layout,
+			class_name,
+			method_name,
+			return_type,
+			args,
+			func_args_and_types,
+			func_args,
+			return_type == "void" ? "" : "return "
+		 );
+	}
+	
+//////////////////////////////cExpandedInterfaceSetterDeclaration/////
+
+
+	// 0 = Class name
+	// 1 = Function name unmangled
+	// 2 = Return type
+	// 3 = Args w/comma
+	private const c_expanded_interface_setter_declaration_layout =
+`typedef {2} (*D_{1}_functype)( D_{0} *{3} );
+extern "C"  {2} {0}_set_{1}( {0}_wrapper *wrapperPtr, D_{1}_functype funcPtr );`;
+
+	public char[] cExpandedInterfaceSetterDeclaration()
+	{
+		auto args = func_args_and_types;
+		if ( args != null )
+			args = ", " ~ func_args_and_types.dup;
+			
+		return Format( c_expanded_interface_setter_declaration_layout,
+			class_name,
+			method_name,
+			return_type,
+			args
+		 );
+	}
+	
+//////////////////////////////cExpandedInterfaceSetter////////////////
+	
+	
+	// 0 = Class name
+	// 1 = Function name unmangled
+	// 2 = Return type
+	private const c_expanded_interface_setter_layout =
+`extern "C"  {2} {0}_set_{1}( {0}_wrapper *wrapperPtr, D_{1}_functype funcPtr )
+{{
+	assert( wrapperPtr != NULL );
+	assert( funcPtr != NULL );
+	wrapperPtr->D_{1} = funcPtr;
+}`;
+
+	public char[] cExpandedInterfaceSetter()
+	{
+		return Format( c_expanded_interface_setter_layout,
+			class_name,
+			method_name,
+			return_type
 		 );
 	}
 

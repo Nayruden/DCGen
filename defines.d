@@ -9,6 +9,10 @@ alias Doc.Node Node;
 const overrideAttribute = `gccxml(override)`;
 const inheritAttribute = `gccxml(inherit)`;
 
+struct Config {
+	bool expandVirtuals = false;
+}
+
 alias bool delegate( Node node ) filterDelegate;
 
 class FilterByID
@@ -38,6 +42,8 @@ char[] typeNodeToString( in Node node )
 	switch( node.name )
 	{
 	case "FundamentalType":
+	case "Struct":
+	case "Class":
 		return node.getAttribute( "name" ).value;
 		break;
 	
@@ -47,7 +53,7 @@ char[] typeNodeToString( in Node node )
 		break;
 		
 	default:
-		assert( false, "Unrecognized tag" );
+		assert( false, "Unrecognized tag: " ~ node.name );
 		break;
 	}
 }
