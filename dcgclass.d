@@ -14,6 +14,7 @@ class DCGClass
 	// Information gleaned from the xml
 	char[] class_name; // The name of the C++ class
 	char[] class_name_mangled; // The mangled C++ class name
+	bool is_abstract; // This class contains virtual functions
 	
 	this( Node class_node, Config config )
 	{
@@ -46,10 +47,13 @@ class DCGClass
 					
 				auto method = new DCGMethod( class_node, node, config );
 				methods ~= method;
+				if ( method.is_virtual )
+					is_abstract = true;
 				break;
 				
 			default:
-				assert( false, "I don't know what a '" ~ node.name ~ "' is!" );
+				// TODO
+				//assert( false, "I don't know what a '" ~ node.name ~ "' is!" );
 				break;
 			}
 		}		
@@ -156,6 +160,7 @@ protected:
 	// 0 = Unmangled class name
 	// 1 = Generated list of C interface declarations
 	// 2 = Generated list of D class functions
+	// 3 = Generated list of C virtual function setters
 	private const classLayoutD =
 `typedef void* C{0};
 private extern (C) 
@@ -163,6 +168,8 @@ private extern (C)
 	C{0} {0}_create();
 	void {0}_destroy( C{0} cPtr );
 {1}
+
+{3}
 }
 
 class {0}
@@ -188,9 +195,12 @@ class {0}
 	{
 		char[] c_interface_declarations;
 		char[] d_class_methods;
+		char[] d_virtual_wrappers;
 		foreach( method; methods ) {
 			c_interface_declarations ~= method.cInterfaceDeclaration ~ "\n";
 			d_class_methods ~= method.dClassMethod ~ "\n\n";
+			if ( method.is_virtual )
+				d_virtual_wrappers ~= method.dVirtualFunctionWrapper ~ "\n\n";
 		}
 		
 		if ( c_interface_declarations.length > 0 )
@@ -198,11 +208,15 @@ class {0}
 		
 		if ( d_class_methods.length > 0 )
 			d_class_methods = d_class_methods[ 0 .. $-2 ]; // Take off the last two newlines
+			
+		if ( d_virtual_wrappers.length > 0 )
+			d_virtual_wrappers = d_virtual_wrappers[ 0 .. $-2 ]; // Take off the last two newlines
 		
 		return Format( classLayoutD,
 			class_name,                 // 0 = Unmangled class name
 			c_interface_declarations,   // 1 = Generated list of C interface declarations
-			d_class_methods             // 2 = Generated list of D class functions
+			d_class_methods,            // 2 = Generated list of D class functions
+			d_virtual_wrappers          // 3 = Generated list of C virtual function setters
 		);
 	}
 }

@@ -174,7 +174,7 @@ class DCGMethod
 	// 3 = Args w/comma
 	private const c_expanded_interface_setter_declaration_layout =
 `typedef {2} (*D_{1}_functype)( D_{0} *{3} );
-extern "C"  {2} {0}_set_{1}( {0}_wrapper *wrapperPtr, D_{1}_functype funcPtr );`;
+extern "C" {2} {0}_set_{1}( {0}_wrapper *wrapperPtr, D_{1}_functype funcPtr );`;
 
 	public char[] cExpandedInterfaceSetterDeclaration()
 	{
@@ -192,12 +192,11 @@ extern "C"  {2} {0}_set_{1}( {0}_wrapper *wrapperPtr, D_{1}_functype funcPtr );`
 	
 //////////////////////////////cExpandedInterfaceSetter////////////////
 	
-	
 	// 0 = Class name
 	// 1 = Function name unmangled
 	// 2 = Return type
 	private const c_expanded_interface_setter_layout =
-`extern "C"  {2} {0}_set_{1}( {0}_wrapper *wrapperPtr, D_{1}_functype funcPtr )
+`extern "C" {2} {0}_set_{1}( {0}_wrapper *wrapperPtr, D_{1}_functype funcPtr )
 {{
 	assert( wrapperPtr != NULL );
 	assert( funcPtr != NULL );
@@ -265,4 +264,37 @@ extern "C"  {2} {0}_set_{1}( {0}_wrapper *wrapperPtr, D_{1}_functype funcPtr );`
 			return_type == "void" ? "" : "return "
 		 );
 	}
+	
+//////////////////////////////dVirtualFunctionWrapper/////////////////
+
+		// 0 = Class name
+		// 1 = Args w/comma and w/types
+		// 2 = Args w/o comma
+		// 3 = Function name unmangled
+		// 4 = Return type
+		// 5 = Return?	
+		private const d_virtual_wrapper_layout = 
+`	// Virtual function wrapper stuff for method {3}
+	alias void function( {0}*{1} ) D_{3}_functype;
+	{4} {0}_set_{3}( {0}_wrapper *wrapperPtr, D_{3}_functype funcPtr );
+	{4} {0}_{3}Wrapper( {0} *dPtr{1} )
+	{{
+		{5}dPtr.{3}( {2} );
+	}`;
+
+		public char[] dVirtualFunctionWrapper()
+		{
+			auto args = func_args_and_types;
+			if ( args != null )
+				args = ", " ~ func_args_and_types.dup;
+
+			return Format( d_virtual_wrapper_layout,
+				class_name,
+				args,
+				func_args,
+				method_name,
+				return_type,
+				return_type == "void" ? "" : "return "
+			 );
+		}
 }

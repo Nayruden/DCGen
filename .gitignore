@@ -1,4 +1,6 @@
 dsss_objs/
 dsss.last
 dcgen
-*.xml
+testsuite/**/*.d
+testsuite/**/*.cpp
+testsuite/**/*.xml

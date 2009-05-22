@@ -2,6 +2,7 @@ module dcgen.main;
 
 import defines;
 import tango.io.FileConduit;
+import Path = tango.io.Path;
 import tango.io.Stdout;
 import tango.util.Arguments;
 import dcgfile;
@@ -10,18 +11,12 @@ import dcgfile;
 int main( char[][] commandLine )
 {
 	Config config;
-    
-	auto args = new Arguments();
-	args.parse( commandLine[ 1 .. $ ] );
-	auto filepath = args[ null ];
-	
-	if ( filepath.length == 0 ) {
-		printHelp();
+	auto success = parseAndValidateParams( config, commandLine[ 1 .. $ ] );
+	if ( !success )
 		return 1;
-	}
 	
 	char[] raw_text;		
-	auto fc = new FileConduit( filepath );
+	auto fc = new FileConduit( config.input_filepath );
 	raw_text.length = fc.length;
 	fc.read( raw_text );
 	
@@ -42,5 +37,28 @@ int main( char[][] commandLine )
 
 void printHelp()
 {
-	Stdout( "Usage: dcgen <filepath>" ).newline;
+	Stderr( "Usage: dcgen [options] <input-file>\n\n"
+	        "The following options are available:\n"
+	        "  --outdir=<output-directory>         Set the output directory" ).newline;
+}
+
+bool parseAndValidateParams( ref Config config, in char[][] params )
+{	
+	auto args = new Arguments();
+	args.define( "outdir" ).parameters( 1 ).defaults( ["."] );
+	args.parse( params );
+	
+	config.input_filepath = args[ null ];
+	if ( config.input_filepath.length == 0 ) {
+		printHelp();
+		return false;
+	}
+	
+	config.output_directory = args[ "outdir" ];
+	if ( !Path.exists( config.output_directory ) ) {
+		Stderr( "Specified output directory does not exist" ).newline;
+		return false;
+	}
+	
+	return true;
 }

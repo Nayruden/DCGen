@@ -10,7 +10,8 @@ const overrideAttribute = `gccxml(override)`;
 const inheritAttribute = `gccxml(inherit)`;
 
 struct Config {
-	bool expandVirtuals = false;
+	char[] input_filepath;
+	char[] output_directory;
 }
 
 alias bool delegate( Node node ) filterDelegate;
