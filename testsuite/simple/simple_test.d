@@ -20,8 +20,7 @@ const expected_output =
 [C++] Class Simple constructed
 [D] Calling foobar...
 [C++] Foobar called
-[D] Cleaning up...
-`;
+[D] Cleaning up...`;
 
 static this() {
 	registerTest( &runTests, expected_output );

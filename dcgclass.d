@@ -179,7 +179,6 @@ class {0}
 	this()
 	{{
 		cPtr = {0}_create();
-		Stdout( "Created cPtr\n" )();
 	}
 
 	~this()

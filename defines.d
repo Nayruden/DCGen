@@ -10,8 +10,9 @@ const overrideAttribute = `gccxml(override)`;
 const inheritAttribute = `gccxml(inherit)`;
 
 struct Config {
-	char[] input_filepath;
-	char[] output_directory;
+	char[]   input_filepath;
+	char[]   output_directory;
+	char[][] include_classes; // Array of strings specifying what classes to include
 }
 
 alias bool delegate( Node node ) filterDelegate;

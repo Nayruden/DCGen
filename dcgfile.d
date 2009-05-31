@@ -30,8 +30,6 @@ class DCGFile
 
 module dcgen.{0};
 
-import tango.io.Stdout; // TODO: Remove this later
-
 {1}
 `;
 	
