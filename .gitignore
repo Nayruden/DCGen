@@ -2,10 +2,11 @@ dsss_objs/
 dsss.last
 dcgen
 testsuite/**/*.d
-!testsuite/**/*_main.d
+!testsuite/**/*_test.d
 testsuite/**/*.cpp
 testsuite/**/*.xml
-testsuite/**/*_main
+testsuite/**/*_test
+testsuite/**/*.txt
 *.dylib
 *.dll
 *.so

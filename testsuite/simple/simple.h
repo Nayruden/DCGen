@@ -2,16 +2,17 @@
 #define SIMPLE_H
 
 #include <stdio.h>
+#include "../lib.h"
 
 class Simple
 {
 public:
 	Simple() {
-		printf( "[C++] Class Simple constructed\n" );
+		outputLine( "Class Simple constructed" );
 	}
-	
+
 	void foobar() {
-		printf( "[C++] Foobar called\n" );
+		outputLine( "Foobar called" );
 	}
 };
 

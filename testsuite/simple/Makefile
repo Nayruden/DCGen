@@ -32,7 +32,7 @@ FINAL := $(BINDIR)/$(OUTPUT)
 all: $(OUTPUT)
 
 $(OUTPUT) : $(OBJS)
-	$(CXX) $(CLINKFLAGS) -o $@ $^ 
+	$(CXX) $(CPPFLAGS) $(CLINKFLAGS) -o $@ $^
 
 clean:
 	$(RM) $(OUTPUT) $(FINAL) $(OBJS)
