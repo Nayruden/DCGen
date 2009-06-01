@@ -16,6 +16,12 @@ struct Config {
 	bool     generate_wrappers; // Generate wrappers for virtual functions?
 }
 
+enum Language {
+	CPP,
+	C,
+	D
+}
+
 enum Access {
 	PUBLIC,
 	PROTECTED,
@@ -52,38 +58,6 @@ class FilterByID
 filterDelegate filterByID( char[] id ) {
 	auto filterClass = new FilterByID( id );
 	return &filterClass.filter;
-}
-
-char[] typeNodeToString( in Node node )
-{
-	switch( node.name )
-	{
-	case "FundamentalType":
-	case "Struct":
-	case "Class":
-		return getNodeAttribute( node, "name" );
-		break;
-	
-	case "PointerType":
-		auto fundamental_node = getNodeByID( node.document, node.getAttribute( "type" ).value );
-		return typeNodeToString( fundamental_node ) ~ "*";
-		break;
-		
-	case "ReferenceType":
-		auto fundamental_node = getNodeByID( node.document, node.getAttribute( "type" ).value );
-		return typeNodeToString( fundamental_node ) ~ "&";
-		break;
-		
-	case "CvQualifiedType":
-		assert( hasAttributeAndEqualTo( node, "const", "1" ), "I don't know how to handle anything but this!" );
-		auto fundamental_node = getNodeByID( node.document, node.getAttribute( "type" ).value );
-		return "const " ~ typeNodeToString( fundamental_node );
-		break;
-		
-	default:
-		assert( false, "Unrecognized variable type: " ~ node.name ~ ". Id is " ~ getNodeAttribute( node, "id" ) );
-		break;
-	}
 }
 
 Node getNodeByID( Doc doc, char[] id )

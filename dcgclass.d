@@ -32,6 +32,7 @@ class DCGClass
 			auto set = doc.query.child.child.filter( filterByID( member ) );
 			
 			auto node = set.nodes[ 0 ];
+			assert( node != null );
 //			if ( hasAttributeAndEqualTo( node, "artificial", "1" ) ) // Not interested in compiler generated functions (yet, TODO)
 //				continue;
 
@@ -73,17 +74,17 @@ class DCGClass
 	
 	public char[] cClassDfn()
 	{
-		char[] c_interface_definitions;
+		char[] cpp_interface_definitions;
 		foreach( method; methods ) {
-			c_interface_definitions ~= method.cInterfaceDefinition ~ "\n\n";
+			cpp_interface_definitions ~= method.cppInterfaceDefinition ~ "\n\n";
 		}
 		
-		if ( c_interface_definitions.length > 0 )
-			c_interface_definitions = c_interface_definitions[ 0 .. $-2 ]; // Take off the last two newlines
+		if ( cpp_interface_definitions.length > 0 )
+			cpp_interface_definitions = cpp_interface_definitions[ 0 .. $-2 ]; // Take off the last two newlines
 		
 		return Format( classLayoutC,
 			class_name,
-			c_interface_definitions
+			cpp_interface_definitions
 		 );
 	}
 	
