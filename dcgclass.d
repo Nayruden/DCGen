@@ -32,15 +32,17 @@ class DCGClass
 			auto set = doc.query.child.child.filter( filterByID( member ) );
 			
 			auto node = set.nodes[ 0 ];
-			if ( hasAttributeAndEqualTo( node, "artificial", "1" ) ) // Not interested in compiler generated functions (yet, TODO)
-				continue;
+//			if ( hasAttributeAndEqualTo( node, "artificial", "1" ) ) // Not interested in compiler generated functions (yet, TODO)
+//				continue;
 
 			// Now let's figure out what type of member this is
 			switch ( node.name ) {
 			case "Field":
+			case "OperatorMethod":
 				// TODO
 				break;
-				
+			
+			case "Destructor":
 			case "Constructor":
 			case "Method":
 				auto method = new DCGMethod( class_node, node, config );
@@ -67,18 +69,7 @@ class DCGClass
 	// 0 = Unmangled class name
 	// 1 = Generated list of C interface definitions
 	private const classLayoutC = 
-`extern "C" {0} *{0}_create()
-{{
-	return new {0}();
-}
-
-extern "C" void {0}_destroy( {0} *cPtr )
-{{
-	assert( cPtr != NULL );
-	delete cPtr;
-}
-
-{1}`;
+`{1}`;
 	
 	public char[] cClassDfn()
 	{
@@ -167,8 +158,6 @@ protected:
 `typedef void* C{0};
 private extern (C) 
 {{
-	C{0} {0}_create();
-	void {0}_destroy( C{0} cPtr );
 {1}
 
 {3}
@@ -177,17 +166,6 @@ private extern (C)
 class {0}
 {{
 	package C{0} cPtr;
-
-	this()
-	{{
-		cPtr = {0}_create();
-	}
-
-	~this()
-	{{
-		{0}_destroy( cPtr );
-		cPtr = null;
-	}
 
 {2}
 }`;

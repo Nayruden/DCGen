@@ -61,16 +61,27 @@ char[] typeNodeToString( in Node node )
 	case "FundamentalType":
 	case "Struct":
 	case "Class":
-		return node.getAttribute( "name" ).value;
+		return getNodeAttribute( node, "name" );
 		break;
 	
 	case "PointerType":
-		auto fundamentalNode = getNodeByID( node.document, node.getAttribute( "type" ).value );
-		return typeNodeToString( fundamentalNode ) ~ "*";
+		auto fundamental_node = getNodeByID( node.document, node.getAttribute( "type" ).value );
+		return typeNodeToString( fundamental_node ) ~ "*";
+		break;
+		
+	case "ReferenceType":
+		auto fundamental_node = getNodeByID( node.document, node.getAttribute( "type" ).value );
+		return typeNodeToString( fundamental_node ) ~ "&";
+		break;
+		
+	case "CvQualifiedType":
+		assert( hasAttributeAndEqualTo( node, "const", "1" ), "I don't know how to handle anything but this!" );
+		auto fundamental_node = getNodeByID( node.document, node.getAttribute( "type" ).value );
+		return "const " ~ typeNodeToString( fundamental_node );
 		break;
 		
 	default:
-		assert( false, "Unrecognized tag: " ~ node.name );
+		assert( false, "Unrecognized variable type: " ~ node.name ~ ". Id is " ~ getNodeAttribute( node, "id" ) );
 		break;
 	}
 }
@@ -83,7 +94,7 @@ Node getNodeByID( Doc doc, char[] id )
 char[] getNodeAttribute( Node node, char[] attribute )
 {
 	// TODO, error checking
-	assert( node.hasAttribute( attribute ), "Cannot retreive attribute: " ~ attribute ); // TODO: Remove for performance?
+	assert( node.hasAttribute( attribute ), "Cannot retreive attribute: " ~ attribute ~ " -- " ~ node.name ); // TODO: Remove for performance?
 	return node.getAttribute( attribute ).value;
 }
 
