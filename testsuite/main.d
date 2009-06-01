@@ -3,6 +3,7 @@ module dcgen.testsuite.main;
 import tango.io.Stdout;
 import tango.io.device.File;
 import Util = tango.text.Util;
+import tango.io.FilePath;
 
 const char FILE_PATH[] = "./output.txt";
 File file;
@@ -19,7 +20,7 @@ void main()
 {
 	foreach( test; tests ) {
 		auto succeeded = test.callback();
-		file.seek( 0 );
+		file.seek( 0 ); // Rewind
 		auto file_content = Util.trim( cast (char[]) file.load );
 		
 		if ( !succeeded )
@@ -32,13 +33,12 @@ void main()
 		else {
 			Stdout( "-- Test passed -- " ).newline;
 		}
-		
-		// Delete file
 	}
 }
 
 void outputLine( char[] str = "" )
 {
+	// We need to seek and flush because we're writing to this file from two languages
 	file.seek( 0, File.Anchor.End );
 	file.write( "[D] " ~ str ~ "\n" );
 	file.flush();
@@ -57,4 +57,9 @@ void registerTest( callbacktype callback, char[] expected_output )
 static this()
 {
 	file = new File( FILE_PATH, File.ReadWriteCreate );
+}
+
+static ~this()
+{
+	FilePath( FILE_PATH ).remove(); // Delete our output file
 }

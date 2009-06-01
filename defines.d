@@ -12,7 +12,22 @@ const inheritAttribute = `gccxml(inherit)`;
 struct Config {
 	char[]   input_filepath;
 	char[]   output_directory;
-	char[][] include_classes; // Array of strings specifying what classes to include
+	char[][] include_classes;   // Array of strings specifying what classes to include
+	bool     generate_wrappers; // Generate wrappers for virtual functions?
+}
+
+enum Access {
+	PUBLIC,
+	PROTECTED,
+	PRIVATE
+}
+
+Access[ char[] ] REVERSE_ACCESS;
+
+static this() {
+	REVERSE_ACCESS[ "public" ] = Access.PUBLIC;
+	REVERSE_ACCESS[ "protected" ] = Access.PROTECTED;
+	REVERSE_ACCESS[ "private" ] = Access.PRIVATE;
 }
 
 alias bool delegate( Node node ) filterDelegate;
@@ -68,6 +83,7 @@ Node getNodeByID( Doc doc, char[] id )
 char[] getNodeAttribute( Node node, char[] attribute )
 {
 	// TODO, error checking
+	assert( node.hasAttribute( attribute ), "Cannot retreive attribute: " ~ attribute ); // TODO: Remove for performance?
 	return node.getAttribute( attribute ).value;
 }
 

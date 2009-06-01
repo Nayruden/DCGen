@@ -22,7 +22,7 @@ class DCGClass
 		class_name = getNodeAttribute( class_node, "name" );
 		class_name_mangled = getNodeAttribute( class_node, "mangled" );
 		
-		auto doc = class_node.document;		
+		auto doc = class_node.document;
 		
 		auto member_ids = getNodeAttribute( class_node, "members" );
 		foreach( member; split( member_ids, " " ) ) {
@@ -41,19 +41,21 @@ class DCGClass
 				// TODO
 				break;
 				
+			case "Constructor":
 			case "Method":
-				if ( hasAttributeAndEqualTo( node, "access", "private" ) ) // Can't do any wrapping here
-					break;
-					
 				auto method = new DCGMethod( class_node, node, config );
+				if ( method.access == Access.PRIVATE ) // Nothing we can do in regards to private
+					break;
+				// TODO: Remember only to output protected stuff to wrappers (and only if it's virtual)					
+				
 				methods ~= method;
 				if ( method.is_virtual )
 					is_abstract = true;
 				break;
 				
 			default:
-				// TODO
-				//assert( false, "I don't know what a '" ~ node.name ~ "' is!" );
+				assert( false, "I don't know what a '" ~ node.name ~ "' is! Id is " ~ 
+						getNodeAttribute( node, "id" ) );
 				break;
 			}
 		}		
@@ -131,7 +133,7 @@ protected:
 		char[] c_expanded_interface_setter_declarations;
 		
 		foreach( method; methods ) {
-			if ( method.needs_expansion ) {
+			if ( method.is_virtual ) {
 				c_expanded_interface_definitions ~= method.cExpandedInterfaceDefinition ~ "\n\n";
 				c_expanded_interface_setters ~= method.cExpandedInterfaceSetter ~ "\n\n";
 				c_expanded_interface_setter_declarations ~= method.cExpandedInterfaceSetterDeclaration ~ "\n\n";

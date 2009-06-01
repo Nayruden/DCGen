@@ -61,7 +61,7 @@ module dcgen.{0};
 	void createCFile()
 	{
 		char[] expanded_output;
-		if ( true ) { // TODO: read config
+		if ( config.generate_wrappers && clazz.is_abstract ) { // If they want wrappers and there's something to wrap...
 			expanded_output = clazz.cExpandedClassDfn() ~ "\n\n\n";
 		}
 		

@@ -6,10 +6,12 @@
 const char FILE_PATH[] = "./output.txt";
 const int MAX_LINE_LENGTH = 256;
 
+// This class basically just statically loads our file and closes it on program close
 class Output {
 public:
 	static void outputLine( char str[] )
 	{
+		// We need to seek and flush because we're writing to this file from two languages
 		int str_len = snprintf( buffer, MAX_LINE_LENGTH, "[C++] %s\n", str );
 		printf( buffer );
 		fseek( file, 0, SEEK_END );

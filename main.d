@@ -44,6 +44,7 @@ void printHelp()
 {
 	Stderr( "Usage: dcgen [options] <input-file>\n\n"
 	        "The following options are available:\n"
+			"  -w (--wrappers)                     Create wrappers for extending virtual functions\n"
 	        "  --outdir=<output-directory>         Set the output directory\n"
 			"  --classes=<comma-separated-list>    List of classes to include in output" ).newline;
 }
@@ -53,6 +54,7 @@ bool parseAndValidateParams( ref Config config, in char[][] params )
 	auto args = new Arguments();
 	args.define( "outdir" ).parameters( 1 ).defaults( ["."] );
 	args.define( "classes" ).parameters( 1 );
+	args.define( "wrappers" ).aliases( ["w"] );
 	args.parse( params );
 	
 	config.input_filepath = args[ null ];
@@ -69,6 +71,11 @@ bool parseAndValidateParams( ref Config config, in char[][] params )
 	
 	if ( args[ "classes" ] !is null )
 		config.include_classes = Util.delimit( args[ "classes" ], "," );
+	
+	if ( args.contains( "wrappers" ) )
+		config.generate_wrappers = true;
+	else
+		config.generate_wrappers = false;
 	
 	return true;
 }

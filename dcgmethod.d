@@ -5,24 +5,6 @@ import tango.io.Stdout;
 import tango.text.convert.Format;
 import tango.text.Util;
 
-
-// // This is only used for instances where it's needed... either a virtual function or a protected function
-// const r_methodDfnC = 
-// `	virtual {3} {1}( {4} )
-// {{
-// 	
-// }
-// 
-// virtual void createScene()
-// {
-// 	if ( createSceneD == NULL )
-// 		return;
-// 
-// 	assert( implD != NULL );
-// 	(*createSceneD)( implD );
-// }
-// `;
-
 class DCGMethod
 {
 	Node class_node, 
@@ -36,32 +18,37 @@ class DCGMethod
 	       method_name_mangled;     // The mangled name of this method
 	
 	bool is_virtual = false,        // Virtual from the C++-side
-	     is_protected = false,      // Protected access from the C++-side
-	     needs_expansion = false; // We need to allow inheritance of this class from the D-side
+	     is_constructor = false;    // Is this method a constructor?
+	
+	Access access;
 	
 	this( Node class_node, Node method_node, Config config )
 	{
 		this.class_node = class_node;
 		this.method_node = method_node;
-
-		auto return_type_node = getNodeByID( method_node.document, getNodeAttribute( method_node, "returns" ) );
-		return_type = typeNodeToString( return_type_node );
+		this.is_constructor = is_constructor;
+		
+		if ( method_node.name == "Constructor" )
+			is_constructor = true;
+		else {
+			scope return_type_node = getNodeByID( method_node.document, getNodeAttribute( method_node, "returns" ) );
+			return_type = typeNodeToString( return_type_node );
+		}
+		
 		generateArgsAndTypes(); // Creates our func_args* strings
 		
 		class_name = getNodeAttribute( class_node, "name" );
 		method_name = getNodeAttribute( method_node, "name" );
 		method_name_mangled = getNodeAttribute( method_node, "mangled" );
 		
-		if ( hasAttributeAndEqualTo( method_node, "virtual", "1" ) &&
-		     method_node.hasAttribute( "attributes" ) && containsPattern( getNodeAttribute( method_node, "attributes" ), overrideAttribute ) ) {
+		if ( hasAttributeAndEqualTo( method_node, "virtual", "1" ) ) {
 			is_virtual = true;
-			needs_expansion = true;
 		}
 		
-		if ( hasAttributeAndEqualTo( method_node, "access", "protected" ) ) {
-			is_protected = true;
-			needs_expansion = true;
-		}
+		auto access_name = getNodeAttribute( method_node, "access" );
+		auto access_pointer = access_name in REVERSE_ACCESS;
+		assert( access_pointer !is null, "Unknown access type: " ~ access_name );
+		access = *access_pointer; // The value's good, reference it
 	}
 	
 //////////////////////////////generateArgsAndTypes////////////////////
