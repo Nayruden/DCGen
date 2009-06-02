@@ -1,5 +1,5 @@
-NAME = simple
-TARGETS = simple
+NAME = pass
+TARGETS = pass
 
 BINDIR = .
 

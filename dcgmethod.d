@@ -118,7 +118,7 @@ class DCGMethod
 		
 		int count = 0;
 		foreach ( arg_type; arg_types ) {
-			arg_names_and_types ~= arg_type ~ " " ~ arg_names[ count ];
+			arg_names_and_types ~= arg_type ~ " " ~ arg_names[ count++ ];
 		}
 		
 		return arg_names_and_types;
