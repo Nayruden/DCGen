@@ -19,16 +19,6 @@ class DCGVarType
 	bool is_primitive;
 	private ReferenceType reference_type[]; // Multiple reference types since we can have pointer to pointer, etc
 	
-	static char[][] REFERENCE_TYPE_LOOKUP;
-	
-	static this() 
-	{
-		REFERENCE_TYPE_LOOKUP = cast( char[][] ) new char[ 8 ][ 3 ]; // TODO: A better way to do this?
-		REFERENCE_TYPE_LOOKUP[ ReferenceType.CONST ]     = "const";
-		REFERENCE_TYPE_LOOKUP[ ReferenceType.REFERENCE ] = "&";
-		REFERENCE_TYPE_LOOKUP[ ReferenceType.POINTER ]   = "*";
-	}
-	
 	this( in Node arg_node, in Config config )
 	in {
 		assert( arg_node != null );
@@ -40,69 +30,59 @@ class DCGVarType
 		parse( arg_node );
 	}
 	
-	char[] layoutCPP()
+	// NOTE: Remember that C is used as the glue between C++ and D, it's always put as externs inside a D file
+	char[] layout ( in Language language )
 	{
-		char[] str = fundamental_type;
+		char[] typ = fundamental_type;
+		if ( language != Language.CPP && !is_primitive )
+			typ = "C" ~ typ; // In D (and since it resides in the same file, C), all C interface stuff is prefixed with "C"
 		
-		foreach ( type; reference_type ) {
-			str ~= REFERENCE_TYPE_LOOKUP[ type ];			
-		}
-		
-		return str;
-	}
-	
-	char[] layoutC()
-	{
-		auto d_type = fundamental_type;
-		if ( !is_primitive )
-			d_type = "C" ~ d_type; // In D, all C interface stuff is prefixed with "C"
-		
-		char[] str = d_type;
-		
+		char[] qualifier;
 		bool pointer_ignored = false;
-		foreach ( type; reference_type ) {
-			// C has no concept of a reference
-			if ( type == ReferenceType.REFERENCE )
-				type = ReferenceType.POINTER;
-			
-			// If it's not a primitive, we have the first pointer taken care of by way of alias
-			if ( type == ReferenceType.POINTER && !is_primitive && !pointer_ignored ) {
-				pointer_ignored = true;
-				continue;
+		foreach ( i, type; reference_type ) {
+			switch (type) {
+				case ReferenceType.CONST:
+					if ( language != Language.CPP ) // C Ignores const
+						break; // TODO: Can we const well in D?
+					
+					if ( i == reference_type.length - 1 ) // If the last qualifying type is const, it means the fundamental type is const
+						typ = "const " ~ typ;
+					else
+						qualifier = "const " ~ qualifier;
+				break;
+				
+				case ReferenceType.REFERENCE:
+					if ( language != Language.CPP ) { // Treat it like a pointer (C doesn't support Refs)
+						// If it's not a primitive, we have the first pointer taken care of by way of alias
+						if ( !is_primitive && !pointer_ignored ) {
+							pointer_ignored = true;
+							break;
+						}
+						qualifier = "*" ~ qualifier; // TODO: Check to make sure refs are not null in contract?
+					}
+					else
+						qualifier = "&" ~ qualifier;
+				break;
+				
+				case ReferenceType.POINTER:
+					// If it's not a primitive, we have the first pointer taken care of by way of alias
+					if ( language != Language.CPP && !is_primitive && !pointer_ignored ) {
+						pointer_ignored = true;
+						break;
+					}
+					qualifier = "*" ~ qualifier;
+				break;
+				
+				default:
+					assert( false, "Should never get here!" );
+				break;
 			}
-			
-			str ~= REFERENCE_TYPE_LOOKUP[ type ]; 
 		}
 		
-		// TODO: hack
-		str = Util.substitute( str, "const ", cast (char[]) null );
-		
-		return str;
-	}
-	
-	char[] layoutD()
-	{
-		auto d_type = fundamental_type;
-		if ( !is_primitive )
-			d_type = "C" ~ d_type; // In D, all C interface stuff is prefixed with "C"
-		
-		char[] str = d_type;
-		
-		foreach ( type; reference_type ) {
-			char[] reference_str;
-			
-			if ( type == ReferenceType.REFERENCE )
-				{} // TODO: Do we ignore this? My brain hurts
-			else
-				assert( false, "TODO" );
-			
-			str ~= reference_str; 
-		}
-		
-		// TODO: hack
-		str = Util.substitute( str, "const ", cast (char[]) null );
-		
-		return str;
+		if ( language != Language.D ) // I'm a stickler about how I like my formatting in different languages
+			return typ ~ " " ~ qualifier;
+		else
+			return typ ~ qualifier ~ " ";
 	}
 	
 	private void parse( in Node node )
@@ -138,14 +118,12 @@ class DCGVarType
 			break;
 			
 		case "CvQualifiedType":
-			// I think this might be for more than just const'ness, so let's verify that this node is for const
-			assert( hasAttributeAndEqualTo( node, "const", "1" ), "I don't know how to handle anything but this!" );
+			// I think this XML node might be for more than just const'ness, so let's verify that this node is for const
+			assert( hasAttributeAndEqualTo( node, "const", "1" ), "I don't know how to handle anything but const here!" );
 			
 			scope fundamental_node = getFundamentalTypeNode( node );
 			assert( fundamental_node != null );
-			// TODO: Hack
-			fundamental_type ~= "const ";
-			// End hack
+			reference_type ~= ReferenceType.CONST;
 			parse( fundamental_node );
 			break;
 			

@@ -33,8 +33,6 @@ class DCGClass
 			
 			auto node = set.nodes[ 0 ];
 			assert( node != null );
-//			if ( hasAttributeAndEqualTo( node, "artificial", "1" ) ) // Not interested in compiler generated functions (yet, TODO)
-//				continue;
 
 			// Now let's figure out what type of member this is
 			switch ( node.name ) {

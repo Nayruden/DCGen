@@ -1,22 +1,34 @@
 module dcgen.testsuite.pass;
 
 import tango.io.Stdout;
-import Pass;
+import passsimple;
 import testsuite.main;
+import Util = tango.text.Util;
+import tango.stdc.stringz;
 
-bool runTests()
+const int REPEAT_NUM = 10;
+
+bool testSimple()
 {
-	outputLine( "Creating Pass class..." );
-	Pass pass = new Pass( 1, 2.3456 );
+	int i = 54;
+	bool b = true;
+	char[] const_str = "Const strings are null-terminated";
+	char[ REPEAT_NUM ] str = Util.repeat( ".", REPEAT_NUM ); // Make it a non-const string
+	bool null_terminated = *(str.ptr + str.length) == '\0';
+	outputLine( "Verifying that we have a string that's not null terminated: " ~ (null_terminated ? "Null terminated value!" : "Okay!") );
+	
+	outputLine( "Creating PassSimple class..." );
+	auto pass = new PassSimple( 1, 2.3456, b, const_str.ptr );
 	outputLine( "Calling setX..." );
 	pass.setX( 41 );
 	outputLine( "Calling setY..." );
 	pass.setY( 41.41 );
+	outputLine( "Calling setStr..." );
+	pass.setStr( str );
 	outputLine( "Calling setX..." );
 	pass.setX( 42 );
 	outputLine( "Calling setY..." );
 	pass.setY( 42.42 );
-	outputLine( "Cleaning up..." );
 	
 	return true;
 }
@@ -35,5 +47,5 @@ const expected_output =
 [D] Cleaning up...`;
 
 static this() {
-	registerTest( &runTests, expected_output );
+	registerTest( &testSimple, expected_output );
 }

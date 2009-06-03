@@ -99,12 +99,7 @@ class DCGMethod
 			auto type_node = getNodeByID( method_node.document, getNodeAttribute( child, "type" ) ); // TODO: Move this to init
 			auto arg_type = new DCGVarType( type_node, config );
 			
-			if ( language == Language.CPP )
-				arg_types ~= arg_type.layoutCPP;
-			else if ( language == Language.C )
-				arg_types ~= arg_type.layoutC;
-			else if ( language == Language.D )
-				arg_types ~= arg_type.layoutD;
+			arg_types ~= arg_type.layout( language );
 		}
 		
 		return arg_types;
@@ -118,7 +113,7 @@ class DCGMethod
 		
 		int count = 0;
 		foreach ( arg_type; arg_types ) {
-			arg_names_and_types ~= arg_type ~ " " ~ arg_names[ count++ ];
+			arg_names_and_types ~= arg_type ~ arg_names[ count++ ];
 		}
 		
 		return arg_names_and_types;
@@ -129,15 +124,8 @@ class DCGMethod
 		if ( arg_type != MethodType.NORMAL ) // Constructor and destructor have no return
 			return "";
 		
-		char[] return_type_str;
-		
 		scope return_type = new DCGVarType( return_type_node, config ); // TODO: Move this to init
-		if ( language == Language.CPP )
-			return_type_str = return_type.layoutCPP;
-		else if ( language == Language.C )
-			return_type_str = return_type.layoutC;
-		else if ( language == Language.D )
-			return_type_str = return_type.layoutD;
+		char[] return_type_str = return_type.layout( language );
 		
 		return return_type_str;
 	}
@@ -153,7 +141,7 @@ class DCGMethod
 	// 6 = Arg names
 	// 7 = Return?
 	private const c_interface_definition_layout = 
-`extern "C" {3} dcgen_{2}( {0} *cPtr{4} )
+`extern "C" {3}dcgen_{2}( {0} *cPtr{4} )
 {{
 	assert( cPtr != NULL );
 	{7}cPtr->{1}( {6} );
@@ -243,8 +231,8 @@ class DCGMethod
 	// 2 = Return type
 	// 3 = Arg names w/comma
 	private const c_expanded_interface_setter_declaration_layout =
-`typedef {2} (*D_{1}_functype)( D_{0} *{3} );
-extern "C" {2} {0}_set_{1}( {0}_wrapper *wrapperPtr, D_{1}_functype funcPtr );`;
+`typedef {2}(*D_{1}_functype)( D_{0} *{3} );
+extern "C" {2}{0}_set_{1}( {0}_wrapper *wrapperPtr, D_{1}_functype funcPtr );`;
 
 	public char[] cExpandedInterfaceSetterDeclaration()
 	{
@@ -264,7 +252,7 @@ extern "C" {2} {0}_set_{1}( {0}_wrapper *wrapperPtr, D_{1}_functype funcPtr );`;
 	// 1 = Function name unmangled
 	// 2 = Return type
 	private const c_expanded_interface_setter_layout =
-`extern "C" {2} {0}_set_{1}( {0}_wrapper *wrapperPtr, D_{1}_functype funcPtr )
+`extern "C" {2}{0}_set_{1}( {0}_wrapper *wrapperPtr, D_{1}_functype funcPtr )
 {{
 	assert( wrapperPtr != NULL );
 	assert( funcPtr != NULL );
@@ -288,7 +276,7 @@ extern "C" {2} {0}_set_{1}( {0}_wrapper *wrapperPtr, D_{1}_functype funcPtr );`;
 	// 3 = Arg names and types w/comma
 	// 4 = Arg names and types w/o comma
 	private const c_interface_declaration_layout = 
-`	{2} dcgen_{1}( C{0} cPtr{3} );`;
+`	{2}dcgen_{1}( C{0} cPtr{3} );`;
 	
 	private const c_interface_declaration_layout_constructor =
 `	C{0} dcgen_{1}_create( {4} );`;
@@ -323,9 +311,10 @@ extern "C" {2} {0}_set_{1}( {0}_wrapper *wrapperPtr, D_{1}_functype funcPtr );`;
 	// 3 = Arg names and types w/o comma
 	// 4 = Arg names w/comma
 	// 5 = Arg names w/o comma
-	// 6 = Return?	
+	// 6 = Return?
+	// TODO: Add a precondition doo-dad
 	private const d_class_method_layout = 
-`	{2} {0}( {3} )
+`	{2}{0}( {3} )
 	{{
 		assert( cPtr != null );
 		{6}dcgen_{1}( cPtr{4} );
