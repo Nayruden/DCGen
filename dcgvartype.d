@@ -4,30 +4,45 @@ import defines;
 import Util = tango.text.Util;
 
 // This has to be global due to a bug in the compiler
-private enum ReferenceType {
+enum ReferenceType {
 	CONST,
 	REFERENCE,
-	POINTER
+	POINTER,
+	ARRAY // TODO: do this
 }
 
 class DCGVarType
 {
-	private const Node arg_node;
-	private const Config config;
+//	private const Config config;
 	
 	char[] fundamental_type;
 	bool is_primitive;
-	private ReferenceType reference_type[]; // Multiple reference types since we can have pointer to pointer, etc
+	private ReferenceType[] reference_type; // Multiple reference types since we can have pointer to pointer, etc
 	
 	this( in Node arg_node, in Config config )
 	in {
 		assert( arg_node != null );
 	}
 	body {
-		this.arg_node = arg_node;
-		this.config = config;
-		
+//		this.config = config;
 		parse( arg_node );
+	}
+	
+	this( in ReferenceType[] reference_type, in char[] fundamental_type, bool is_primitive ) // TODO: Add config or remove entirely
+	{
+		this.reference_type = reference_type;
+		this.fundamental_type = fundamental_type;
+		this.is_primitive = is_primitive;
+	}
+	
+	ReferenceType[] referenceType()
+	{
+		return reference_type.dup; // No touchy
+	}
+	
+	char[] fundamentalType()
+	{
+		return fundamental_type.dup; // No touchy
 	}
 	
 	// NOTE: Remember that C is used as the glue between C++ and D, it's always put as externs inside a D file
@@ -73,6 +88,10 @@ class DCGVarType
 					qualifier = "*" ~ qualifier;
 				break;
 				
+				case ReferenceType.ARRAY: // TODO: Think this through better
+					qualifier = "[]" ~ qualifier;
+				break;
+				
 				default:
 					assert( false, "Should never get here!" );
 				break;
@@ -95,12 +114,12 @@ class DCGVarType
 		case "Struct":
 		case "Class":
 			is_primitive = false;
-			fundamental_type ~= getNodeAttribute( node, "name" );
+			fundamental_type = getNodeAttribute( node, "name" );
 			break;
 			
 		case "FundamentalType":
 			is_primitive = true;
-			fundamental_type ~= getNodeAttribute( node, "name" );
+			fundamental_type = getNodeAttribute( node, "name" );
 			break;
 		
 		case "PointerType":

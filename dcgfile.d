@@ -30,6 +30,8 @@ class DCGFile
 
 module dcgen.{0}; // TODO: make prefix a config
 
+import tango.stdc.stringz; // TODO: Don't import this if we don't need it
+
 {1}
 `;
 	

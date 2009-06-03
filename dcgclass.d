@@ -74,7 +74,7 @@ class DCGClass
 	{
 		char[] cpp_interface_definitions;
 		foreach( method; methods ) {
-			cpp_interface_definitions ~= method.cppInterfaceDefinition ~ "\n\n";
+			cpp_interface_definitions ~= method.interfaceDefinition ~ "\n\n";
 		}
 		
 		if ( cpp_interface_definitions.length > 0 )
@@ -175,8 +175,8 @@ class {0}
 		char[] d_class_methods;
 		char[] d_virtual_wrappers;
 		foreach( method; methods ) {
-			c_interface_declarations ~= method.cInterfaceDeclaration ~ "\n";
-			d_class_methods ~= method.dClassMethod ~ "\n\n";
+			c_interface_declarations ~= method.interfaceDeclaration ~ "\n";
+			d_class_methods ~= method.classMethod ~ "\n\n";
 			if ( method.is_virtual )
 				d_virtual_wrappers ~= method.dVirtualFunctionWrapper ~ "\n\n";
 		}

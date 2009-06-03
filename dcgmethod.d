@@ -6,6 +6,7 @@ import tango.io.Stdout;
 import tango.text.convert.Format;
 import Util = tango.text.Util;
 import Integer = tango.text.convert.Integer;
+import dcgpreprocess;
 
 // This has to be global due to a bug in the compiler
 private enum MethodType {
@@ -17,8 +18,11 @@ private enum MethodType {
 class DCGMethod
 {
 	private Node class_node, 
-	        method_node,
-			return_type_node;
+	        method_node;
+	
+	private DCGVarType return_type;
+	private DCGVarType[] arg_types;
+	
 	private Config config;
 	
 	char[] class_name,              // The name of the class this method belongs to
@@ -28,7 +32,7 @@ class DCGMethod
 	bool is_virtual = false;        // Virtual from the C++-side
 	
 	Access access;
-	MethodType arg_type;
+	MethodType method_type;
 	
 	this( Node class_node, Node method_node, Config config )
 	{
@@ -39,23 +43,38 @@ class DCGMethod
 		class_name = getNodeAttribute( class_node, "name" );
 		method_name = getNodeAttribute( method_node, "name" );
 		method_name_mangled = getNodeAttribute( method_node, "mangled" );
-		method_name_mangled = Util.substitute( method_name_mangled, "*INTERNAL*", cast (char[]) null ); // TODO: Is there really a good reason for this?
+		// TODO: Is there really a good reason for this being marked INTERNAL?
+		method_name_mangled = Util.substitute( method_name_mangled, "*INTERNAL*", cast (char[]) null );
 		method_name_mangled = Util.trim( method_name_mangled );
 		
 		if ( method_node.name == "Constructor" )
-			arg_type = MethodType.CONSTRUCTOR;
+			method_type = MethodType.CONSTRUCTOR;
 		else if ( method_node.name == "Destructor" ){
-			arg_type = MethodType.DESTRUCTOR;
+			method_type = MethodType.DESTRUCTOR;
 		}
 		else {
-			arg_type = MethodType.NORMAL;
-			return_type_node = getNodeByID( method_node.document, getNodeAttribute( method_node, "returns" ) );
+			method_type = MethodType.NORMAL;
+			scope return_type_node = getNodeByID( method_node.document, getNodeAttribute( method_node, "returns" ) );
+			return_type = new DCGVarType( return_type_node, config );
 		}
+		
+		foreach ( child; method_node.children ) {
+			if ( child == null || child.name == null )
+				continue;
+				
+			scope type_node = getNodeByID( method_node.document, getNodeAttribute( child, "type" ) );
+			auto method_type = new DCGVarType( type_node, config );
+			
+			arg_types ~= method_type;
+		}
+		
+		
 		
 		if ( hasAttributeAndEqualTo( method_node, "virtual", "1" ) ) {
 			is_virtual = true;
 		}
 		
+		// What type of access are we? Private, Public, or Protected?
 		auto access_name = getNodeAttribute( method_node, "access" );
 		auto access_pointer = access_name in REVERSE_ACCESS;
 		assert( access_pointer !is null, "Unknown access type: " ~ access_name );
@@ -70,9 +89,22 @@ class DCGMethod
 		return null;
 	}
 	
+	private char[] prefixNewlineAndTab( char[] str, int num_tabs )
+	{
+		if ( str != null ) {
+			char[][] newlines;
+			foreach ( line; Util.lines( str ) ) {
+				newlines ~= Util.repeat( "\t", num_tabs ) ~ line;
+			}
+			return "\n" ~ Util.join( newlines, "\n" );
+		}
+		
+		return null;
+	}
+	
 	private char[][] getArgNames()
 	{
-		char[][] arg_names;
+		char[][] processed_arg_names_arr;
 		int arg_num = 0;
 		foreach( child; method_node.children ) {
 			if ( child == null || child.name == null )
@@ -80,40 +112,45 @@ class DCGMethod
 			arg_num++;
 
 			if ( child.hasAttribute( "name" ) )
-				arg_names ~= getNodeAttribute( child, "name" );
+				processed_arg_names_arr ~= getNodeAttribute( child, "name" );
 			else
-				arg_names ~= "arg" ~ Integer.toString( arg_num );
+				processed_arg_names_arr ~= "arg" ~ Integer.toString( arg_num );
 		}
 		
-		return arg_names;
+		return processed_arg_names_arr;
 	}
 	
-	private char[][] getArgTypes( Language language )
+	private char[][] getArgTypes( Language language, DCGVarType[] arg_types=null )
 	{
-		char[][] arg_types;
+		if ( arg_types == null )
+			arg_types = this.arg_types; // TODO: Better naming
 		
-		foreach( child; method_node.children ) {
-			if ( child == null || child.name == null )
-				continue;
-				
-			auto type_node = getNodeByID( method_node.document, getNodeAttribute( child, "type" ) ); // TODO: Move this to init
-			auto arg_type = new DCGVarType( type_node, config );
-			
-			arg_types ~= arg_type.layout( language );
+		char[][] arg_types_str;
+		
+		foreach( method_type; arg_types ) {			
+			arg_types_str ~= method_type.layout( language );
 		}
 		
-		return arg_types;
+		return arg_types_str;
 	}
 	
-	private char[][] getArgNamesAndTypes( Language language )
+	private char[][] getArgNamesAndTypes( Language language, DCGVarType[] types=null )
 	{
-		char[][] arg_types = getArgTypes( language );
+		if ( types == null )
+			types = this.arg_types; // TODO: Better naming
+		
+		char[][] arg_types = getArgTypes( language, types );
 		char[][] arg_names = getArgNames();
+
+		return combineArgNamesAndTypes( arg_types, arg_names );
+	}
+	
+	private char[][] combineArgNamesAndTypes( char[][] arg_types, char[][] arg_names )
+	{
 		char[][] arg_names_and_types;
-		
-		int count = 0;
-		foreach ( arg_type; arg_types ) {
-			arg_names_and_types ~= arg_type ~ arg_names[ count++ ];
+
+		for ( int i = 0; i < arg_types.length; i++ ) {
+			arg_names_and_types ~= arg_types[ i ] ~ arg_names[ i ];
 		}
 		
 		return arg_names_and_types;
@@ -121,13 +158,10 @@ class DCGMethod
 	
 	private char[] getReturnType( Language language )
 	{
-		if ( arg_type != MethodType.NORMAL ) // Constructor and destructor have no return
+		if ( method_type != MethodType.NORMAL ) // Constructor and destructor have no return
 			return "";
 		
-		scope return_type = new DCGVarType( return_type_node, config ); // TODO: Move this to init
-		char[] return_type_str = return_type.layout( language );
-		
-		return return_type_str;
+		return return_type.layout( language );
 	}
 	
 //////////////////////////////cppInterfaceDefinition//////////////////
@@ -140,20 +174,20 @@ class DCGMethod
 	// 5 = Arg names and types w/o comma
 	// 6 = Arg names
 	// 7 = Return?
-	private const c_interface_definition_layout = 
+	private const cpp_interface_definition = 
 `extern "C" {3}dcgen_{2}( {0} *cPtr{4} )
 {{
 	assert( cPtr != NULL );
 	{7}cPtr->{1}( {6} );
 }`;
 	
-	private const c_interface_definition_layout_constructor = 
+	private const cpp_interface_definition_constructor = 
 `extern "C" {0} *dcgen_{2}_create( {5} )
 {{
 	return new {0}( {6} );
 }`;
 	
-	private const c_interface_definition_layout_destructor = 
+	private const cpp_interface_definition_destructor = 
 `extern "C" void dcgen_{2}_destroy( {0} *cPtr )
 {{
 	assert( cPtr != NULL );
@@ -161,27 +195,144 @@ class DCGMethod
 }`;
 
 	
-	public char[] cppInterfaceDefinition()
+	public char[] interfaceDefinition( Language language = Language.CPP )
 	{
-		scope arg_names = Util.join( getArgNames(), ", " );
-		scope arg_names_and_types = Util.join( getArgNamesAndTypes( Language.CPP ), ", " );
-		scope return_type = getReturnType( Language.CPP );
+		assert( language == Language.CPP, "I don't know how to create interface definitions for anything but CPP" );
 		
-		scope char[] format = c_interface_definition_layout;
-		if ( arg_type == MethodType.CONSTRUCTOR )
-			format = c_interface_definition_layout_constructor;
-		else if ( arg_type == MethodType.DESTRUCTOR )
-			format = c_interface_definition_layout_destructor;
+		scope processed_arg_names_arr = Util.join( getArgNames(), ", " );
+		scope arg_names_and_types = Util.join( getArgNamesAndTypes( language ), ", " );
+		scope unprocessed_return_type = getReturnType( language );
+		
+		scope char[] format = cpp_interface_definition;
+		if ( method_type == MethodType.CONSTRUCTOR )
+			format = cpp_interface_definition_constructor;
+		else if ( method_type == MethodType.DESTRUCTOR )
+			format = cpp_interface_definition_destructor;
 
 		return Format( format,
 			class_name,
 			method_name,
 			method_name_mangled,
-			return_type,
+			unprocessed_return_type,
 			prefixComma( arg_names_and_types ),
 			arg_names_and_types,
-			arg_names,
-			return_type == "void" ? "" : "return "
+			processed_arg_names_arr,
+			unprocessed_return_type == "void" ? "" : "return "
+		 );
+	}
+	
+//////////////////////////////interfaceDeclaration///////////////////
+	
+	// 0 = Class name
+	// 1 = Function name mangled
+	// 2 = Return type
+	// 3 = Arg names and types w/comma
+	// 4 = Arg names and types w/o comma
+	private const c_interface_declaration = 
+`	{2}dcgen_{1}( C{0} cPtr{3} );`;
+	
+	private const c_interface_declaration_constructor =
+`	C{0} dcgen_{1}_create( {4} );`;
+	
+	private const c_interface_declaration_destructor =
+`	void dcgen_{1}_destroy( C{0} cPtr );`;
+	
+	char[] interfaceDeclaration( Language language = Language.C )
+	{
+		assert( language == Language.C, "I don't know how to create interface declarations for anything but C" );
+		
+		scope arg_names_and_types = Util.join( getArgNamesAndTypes( language ), ", " );
+		
+		scope char[] format = c_interface_declaration;
+		if ( method_type == MethodType.CONSTRUCTOR )
+			format = c_interface_declaration_constructor;
+		else if ( method_type == MethodType.DESTRUCTOR )
+			format = c_interface_declaration_destructor;
+		
+		return Format( format,
+			class_name,
+			method_name_mangled,
+			getReturnType( language ),
+			prefixComma( arg_names_and_types ),
+			arg_names_and_types
+		);
+	}
+	
+//////////////////////////////dClassMethod////////////////////////////
+
+	// 0 = Function name unmangled
+	// 1 = Function name mangled
+	// 2 = Return type
+	// 3 = Unprocessed arg names and processed types w/o comma
+	// 4 = Processed arg names w/comma
+	// 5 = Processed arg names w/o comma
+	// 6 = Return?
+	// 7 = Preconditions
+	// 8 = Preprocessing
+	private const d_class_method = 
+`	{2}{0}( {3} )
+    in {{
+		assert( cPtr != null );{7}
+	}
+	body {{{8}
+		{6}dcgen_{1}( cPtr{4} );
+	}`;
+	
+	private const d_class_method_constructor =
+`	this( {3} )
+	out {{
+		assert( cPtr != null );
+	}
+	body {{{8}
+		cPtr = dcgen_{1}_create( {5} );
+	}`;
+	
+	private const d_class_method_destructor =
+`	~this()
+	in {{
+		assert( cPtr != null );
+	}
+	body {{{8}
+		dcgen_{1}_destroy( cPtr );
+		cPtr = null;
+	}`;
+	
+	char[] classMethod( Language language = Language.D )
+	{
+		assert( language == Language.D, "I don't know how to create class methods for anything but D" );
+		
+		// Setup vars for processing
+		scope processed_arg_names_arr = getArgNames();
+		scope processed_arg_types_arr = arg_types.dup;
+		scope char[] preconditions, preprocessing;
+		
+		// Do proccessing
+		for ( int i=0; i < processed_arg_types_arr.length; i++ )
+			preprocessing ~= DCGPreprocess.convert( language, Language.C, processed_arg_types_arr[ i ], processed_arg_names_arr[ i ] );
+		
+		// Determine format
+		scope char[] format = d_class_method;
+		if ( method_type == MethodType.CONSTRUCTOR )
+			format = d_class_method_constructor;
+		else if ( method_type == MethodType.DESTRUCTOR )
+			format = d_class_method_destructor;
+		
+		// Setup final processed vars
+		scope processed_arg_types = getArgTypes( language, processed_arg_types_arr );
+		scope args_for_header = Util.join( combineArgNamesAndTypes( processed_arg_types, getArgNames() ), ", " );
+		scope processed_arg_names_str = Util.join( processed_arg_names_arr, ", " );
+		scope unprocessed_return_type = getReturnType( language ); // TODO: Return processing
+		
+		return Format( format,
+			method_name,
+			method_name_mangled,
+			unprocessed_return_type,
+			args_for_header,
+			prefixComma( processed_arg_names_str ),
+			processed_arg_names_str,
+			unprocessed_return_type == "void" ? "" : "return ",
+			prefixNewlineAndTab( preconditions, 2 ),
+			prefixNewlineAndTab( preprocessing, 2 )
 		 );
 	}
 	
@@ -207,19 +358,19 @@ class DCGMethod
 	friend {2} {0}_set_{1}( {0}_wrapper *wrapperPtr, D_{1}_functype funcPtr );`;
 
 
-	public char[] cExpandedInterfaceDefinition()
+	char[] cExpandedInterfaceDefinition()
 	{
-		scope arg_names = Util.join( getArgNames(), ", " );
+		scope processed_arg_names_arr = Util.join( getArgNames(), ", " );
 		scope arg_names_and_types = Util.join( getArgNamesAndTypes( Language.CPP ), ", " );
-		scope return_type = getReturnType( Language.CPP );
+		scope unprocessed_return_type = getReturnType( Language.CPP );
 
 		return Format( c_expanded_interface_definition_layout,
 			class_name,
 			method_name,
-			return_type,
+			unprocessed_return_type,
 			arg_names_and_types,
-			prefixComma( arg_names ),
-			return_type == "void" ? "" : "return "
+			prefixComma( processed_arg_names_arr ),
+			unprocessed_return_type == "void" ? "" : "return "
 		 );
 	}
 	
@@ -236,13 +387,13 @@ extern "C" {2}{0}_set_{1}( {0}_wrapper *wrapperPtr, D_{1}_functype funcPtr );`;
 
 	public char[] cExpandedInterfaceSetterDeclaration()
 	{
-		scope arg_names = Util.join( getArgNames(), ", " );
+		scope processed_arg_names_arr = Util.join( getArgNames(), ", " );
 			
 		return Format( c_expanded_interface_setter_declaration_layout,
 			class_name,
 			method_name,
 			getReturnType( Language.C ),
-			prefixComma( arg_names )
+			prefixComma( processed_arg_names_arr )
 		 );
 	}
 	
@@ -267,94 +418,6 @@ extern "C" {2}{0}_set_{1}( {0}_wrapper *wrapperPtr, D_{1}_functype funcPtr );`;
 			getReturnType( Language.CPP )
 		 );
 	}
-
-//////////////////////////////cInterfaceDeclaration///////////////////
-	
-	// 0 = Class name
-	// 1 = Function name mangled
-	// 2 = Return type
-	// 3 = Arg names and types w/comma
-	// 4 = Arg names and types w/o comma
-	private const c_interface_declaration_layout = 
-`	{2}dcgen_{1}( C{0} cPtr{3} );`;
-	
-	private const c_interface_declaration_layout_constructor =
-`	C{0} dcgen_{1}_create( {4} );`;
-	
-	private const c_interface_declaration_layout_destructor =
-`	void dcgen_{1}_destroy( C{0} cPtr );`;
-	
-	public char[] cInterfaceDeclaration()
-	{
-		scope arg_names_and_types = Util.join( getArgNamesAndTypes( Language.C ), ", " );
-		
-		scope char[] format = c_interface_declaration_layout;
-		if ( arg_type == MethodType.CONSTRUCTOR )
-			format = c_interface_declaration_layout_constructor;
-		else if ( arg_type == MethodType.DESTRUCTOR )
-			format = c_interface_declaration_layout_destructor;
-		
-		return Format( format,
-			class_name,
-			method_name_mangled,
-			getReturnType( Language.C ),
-			prefixComma( arg_names_and_types ),
-			arg_names_and_types
-		);
-	}
-	
-//////////////////////////////dClassMethod////////////////////////////
-
-	// 0 = Function name unmangled
-	// 1 = Function name mangled
-	// 2 = Return type
-	// 3 = Arg names and types w/o comma
-	// 4 = Arg names w/comma
-	// 5 = Arg names w/o comma
-	// 6 = Return?
-	// TODO: Add a precondition doo-dad
-	private const d_class_method_layout = 
-`	{2}{0}( {3} )
-	{{
-		assert( cPtr != null );
-		{6}dcgen_{1}( cPtr{4} );
-	}`;
-	
-	private const d_class_method_layout_constructor =
-`	this( {3} )
-	{{
-		cPtr = dcgen_{1}_create( {5} );
-	}`;
-	
-	private const d_class_method_layout_destructor =
-`	~this()
-	{{
-		dcgen_{1}_destroy( cPtr );
-		cPtr = null;
-	}`;
-	
-	public char[] dClassMethod()
-	{
-		scope arg_names = Util.join( getArgNames(), ", " );
-		scope arg_names_and_types = Util.join( getArgNamesAndTypes( Language.D ), ", " ); // TODO: Change to D
-		scope return_type = getReturnType( Language.D );
-		
-		scope char[] format = d_class_method_layout;
-		if ( arg_type == MethodType.CONSTRUCTOR )
-			format = d_class_method_layout_constructor;
-		else if ( arg_type == MethodType.DESTRUCTOR )
-			format = d_class_method_layout_destructor;
-			
-		return Format( format,
-			method_name,
-			method_name_mangled,
-			return_type,
-			arg_names_and_types,
-			prefixComma( arg_names ),
-			arg_names,
-			return_type == "void" ? "" : "return "
-		 );
-	}
 	
 //////////////////////////////dVirtualFunctionWrapper/////////////////
 
@@ -375,17 +438,17 @@ extern "C" {2}{0}_set_{1}( {0}_wrapper *wrapperPtr, D_{1}_functype funcPtr );`;
 
 	public char[] dVirtualFunctionWrapper()
 	{
-		scope arg_names = Util.join( getArgNames(), ", " );
+		scope processed_arg_names_arr = Util.join( getArgNames(), ", " );
 		scope arg_names_and_types = Util.join( getArgNamesAndTypes( Language.CPP ), ", " );
-		scope return_type = getReturnType( Language.CPP );
+		scope unprocessed_return_type = getReturnType( Language.CPP );
 
 		return Format( d_virtual_wrapper_layout,
 			class_name,
 			prefixComma( arg_names_and_types ),
-			arg_names,
+			processed_arg_names_arr,
 			method_name,
-			return_type,
-			return_type == "void" ? "" : "return "
+			unprocessed_return_type,
+			unprocessed_return_type == "void" ? "" : "return "
 		 );
 	}
 }
