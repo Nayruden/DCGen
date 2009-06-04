@@ -6,7 +6,7 @@ import tango.io.Stdout;
 import tango.text.convert.Format;
 import Util = tango.text.Util;
 import Integer = tango.text.convert.Integer;
-import dcgpreprocess;
+import dcgprocess;
 
 // This has to be global due to a bug in the compiler
 private enum MethodType {
@@ -96,7 +96,7 @@ class DCGMethod
 			foreach ( line; Util.lines( str ) ) {
 				newlines ~= Util.repeat( "\t", num_tabs ) ~ line;
 			}
-			return "\n" ~ Util.join( newlines, "\n" );
+			return "\n" ~ Util.trimr( Util.join( newlines, "\n" ) );
 		}
 		
 		return null;
@@ -156,12 +156,15 @@ class DCGMethod
 		return arg_names_and_types;
 	}
 	
-	private char[] getReturnType( Language language )
+	private char[] getReturnType( Language language, DCGVarType typ=null )
 	{
 		if ( method_type != MethodType.NORMAL ) // Constructor and destructor have no return
 			return "";
 		
-		return return_type.layout( language );
+		if ( typ is null )
+			typ = return_type;
+		
+		return typ.layout( language );
 	}
 	
 //////////////////////////////cppInterfaceDefinition//////////////////
@@ -269,13 +272,14 @@ class DCGMethod
 	// 6 = Return?
 	// 7 = Preconditions
 	// 8 = Preprocessing
+	// 9 = Postprocessing
 	private const d_class_method = 
 `	{2}{0}( {3} )
     in {{
 		assert( cPtr != null );{7}
 	}
 	body {{{8}
-		{6}dcgen_{1}( cPtr{4} );
+		{6}dcgen_{1}( cPtr{4} );{9}
 	}`;
 	
 	private const d_class_method_constructor =
@@ -304,11 +308,19 @@ class DCGMethod
 		// Setup vars for processing
 		scope processed_arg_names_arr = getArgNames();
 		scope processed_arg_types_arr = arg_types.dup;
-		scope char[] preconditions, preprocessing;
+		scope char[] preconditions, preprocessing, postprocessing, processed_return_type_str;
 		
 		// Do proccessing
 		for ( int i=0; i < processed_arg_types_arr.length; i++ )
-			preprocessing ~= DCGPreprocess.convert( language, Language.C, processed_arg_types_arr[ i ], processed_arg_names_arr[ i ] );
+			preprocessing ~= DCGProcess.convert( language, Language.C, processed_arg_types_arr[ i ], processed_arg_names_arr[ i ] );
+		char[] return_value_name = "return_value";
+		if ( method_type == MethodType.NORMAL ) { // No return on constructor and destructor
+			auto processed_return_type = return_type;
+			postprocessing ~= DCGProcess.convert( Language.C, language, processed_return_type, return_value_name );
+			processed_return_type_str = getReturnType( language, processed_return_type );
+		}
+		if ( postprocessing.length > 0 )
+			postprocessing ~= "return " ~ return_value_name ~ ";\n";
 		
 		// Determine format
 		scope char[] format = d_class_method;
@@ -321,18 +333,20 @@ class DCGMethod
 		scope processed_arg_types = getArgTypes( language, processed_arg_types_arr );
 		scope args_for_header = Util.join( combineArgNamesAndTypes( processed_arg_types, getArgNames() ), ", " );
 		scope processed_arg_names_str = Util.join( processed_arg_names_arr, ", " );
-		scope unprocessed_return_type = getReturnType( language ); // TODO: Return processing
+		scope return_immediately = (processed_return_type_str != "void" && postprocessing.length == 0);
+		scope return_str = (return_immediately ? "return " : (postprocessing.length > 0 ? "auto return_value = " : ""));
 		
 		return Format( format,
 			method_name,
 			method_name_mangled,
-			unprocessed_return_type,
+			processed_return_type_str,
 			args_for_header,
 			prefixComma( processed_arg_names_str ),
 			processed_arg_names_str,
-			unprocessed_return_type == "void" ? "" : "return ",
+			return_str,
 			prefixNewlineAndTab( preconditions, 2 ),
-			prefixNewlineAndTab( preprocessing, 2 )
+			prefixNewlineAndTab( preprocessing, 2 ),
+			prefixNewlineAndTab( postprocessing, 2 )
 		 );
 	}
 	
