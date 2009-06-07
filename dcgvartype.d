@@ -12,23 +12,20 @@ enum ReferenceType {
 }
 
 class DCGVarType
-{
-//	private const Config config;
-	
+{	
 	char[] fundamental_type;
 	bool is_primitive;
 	private ReferenceType[] reference_type; // Multiple reference types since we can have pointer to pointer, etc
 	
-	this( in Node arg_node, in Config config )
+	this( in Node arg_node )
 	in {
 		assert( arg_node != null );
 	}
 	body {
-//		this.config = config;
 		parse( arg_node );
 	}
 	
-	this( in ReferenceType[] reference_type, in char[] fundamental_type, bool is_primitive ) // TODO: Add config or remove entirely
+	this( in ReferenceType[] reference_type, in char[] fundamental_type, bool is_primitive )
 	{
 		this.reference_type = reference_type;
 		this.fundamental_type = fundamental_type;

@@ -5,8 +5,8 @@ import dcgvartype;
 import tango.io.Stdout;
 import tango.text.convert.Format;
 import Util = tango.text.Util;
-import Integer = tango.text.convert.Integer;
 import dcgprocess;
+import functiontype;
 
 // This has to be global due to a bug in the compiler
 private enum MethodType {
@@ -16,13 +16,9 @@ private enum MethodType {
 	DESTRUCTOR
 }
 
-class DCGMethod
+class DCGMethod : FunctionType
 {
-	private Node class_node, 
-	        method_node;
-	
-	private DCGVarType return_type;
-	private DCGVarType[] arg_types;
+	private Node class_node;
 	
 	private Config config;
 	
@@ -35,51 +31,40 @@ class DCGMethod
 	Access access;
 	MethodType method_type;
 	
-	this( Node class_node, Node method_node, Config config )
+	this( Node class_node, Node function_node, Config config )
 	{
+		super( function_node );
 		this.class_node = class_node;
-		this.method_node = method_node;
 		this.config = config;
 		
-		if ( method_node.name == "Constructor" )
+		if ( function_node.name == "Constructor" )
 			method_type = MethodType.CONSTRUCTOR;
-		else if ( method_node.name == "Destructor" )
+		else if ( function_node.name == "Destructor" )
 			method_type = MethodType.DESTRUCTOR;
-		else if ( method_node.name == "Function" )
+		else if ( function_node.name == "Function" )
 			method_type = MethodType.GLOBAL;
-		else {
+		else if ( function_node.name == "Method" )
 			method_type = MethodType.METHOD;
-			scope return_type_node = getNodeByID( method_node.document, getNodeAttribute( method_node, "returns" ) );
-			return_type = new DCGVarType( return_type_node, config );
-		}
+		else 
+			assert( false, "I don't know how to deal with this type of function (" ~ function_node.name ~ ")" );
 		
-		method_name = getNodeAttribute( method_node, "name" );
+		method_name = getNodeAttribute( function_node, "name" );
 		if ( method_type != MethodType.GLOBAL ) {
 			class_name = getNodeAttribute( class_node, "name" );
-			method_name_mangled = getNodeAttribute( method_node, "mangled" );
+			method_name_mangled = getNodeAttribute( function_node, "mangled" );
 			// TODO: Is there really a good reason for this being marked INTERNAL?
 			method_name_mangled = Util.substitute( method_name_mangled, "*INTERNAL*", cast (char[]) null );
 			method_name_mangled = Util.trim( method_name_mangled );
 		}
 		else
-			method_name_mangled = method_name;	
+			method_name_mangled = method_name;
 		
-		foreach ( child; method_node.children ) {
-			if ( child == null || child.name == null )
-				continue;
-				
-			scope type_node = getNodeByID( method_node.document, getNodeAttribute( child, "type" ) );
-			auto method_type = new DCGVarType( type_node, config );
-			
-			arg_types ~= method_type;
-		}
-		
-		if ( hasAttributeAndEqualTo( method_node, "virtual", "1" ) ) {
+		if ( hasAttributeAndEqualTo( function_node, "virtual", "1" ) ) {
 			is_virtual = true;
 		}
 		
 		// What type of access are we? Private, Public, or Protected?
-		auto access_name = getNodeAttribute( method_node, "access" );
+		auto access_name = getNodeAttribute( function_node, "access" );
 		auto access_pointer = access_name in REVERSE_ACCESS;
 		assert( access_pointer !is null, "Unknown access type: " ~ access_name );
 		access = *access_pointer; // The value's good, reference it
@@ -104,71 +89,6 @@ class DCGMethod
 		}
 		
 		return null;
-	}
-	
-	private char[][] getArgNames()
-	{
-		char[][] processed_arg_names_arr;
-		int arg_num = 0;
-		foreach( child; method_node.children ) {
-			if ( child == null || child.name == null )
-				continue;
-			arg_num++;
-
-			if ( child.hasAttribute( "name" ) )
-				processed_arg_names_arr ~= getNodeAttribute( child, "name" );
-			else
-				processed_arg_names_arr ~= "arg" ~ Integer.toString( arg_num );
-		}
-		
-		return processed_arg_names_arr;
-	}
-	
-	private char[][] getArgTypes( Language language, DCGVarType[] arg_types=null )
-	{
-		if ( arg_types == null )
-			arg_types = this.arg_types; // TODO: Better naming
-		
-		char[][] arg_types_str;
-		
-		foreach( method_type; arg_types ) {			
-			arg_types_str ~= method_type.layout( language );
-		}
-		
-		return arg_types_str;
-	}
-	
-	private char[][] getArgNamesAndTypes( Language language, DCGVarType[] types=null )
-	{
-		if ( types == null )
-			types = this.arg_types; // TODO: Better naming
-		
-		char[][] arg_types = getArgTypes( language, types );
-		char[][] arg_names = getArgNames();
-
-		return combineArgNamesAndTypes( arg_types, arg_names );
-	}
-	
-	private char[][] combineArgNamesAndTypes( char[][] arg_types, char[][] arg_names )
-	{
-		char[][] arg_names_and_types;
-
-		for ( int i = 0; i < arg_types.length; i++ ) {
-			arg_names_and_types ~= arg_types[ i ] ~ arg_names[ i ];
-		}
-		
-		return arg_names_and_types;
-	}
-	
-	private char[] getReturnType( Language language, DCGVarType typ=null )
-	{
-		if ( method_type != MethodType.METHOD ) // Constructor and destructor have no return
-			return "";
-		
-		if ( typ is null )
-			typ = return_type;
-		
-		return typ.layout( language );
 	}
 	
 //////////////////////////////interfaceDefinition//////////////////
