@@ -111,43 +111,49 @@ class DCGVarType
 	body {
 		switch( node.name )
 		{
-		case "Struct":
-		case "Class":
-			is_primitive = false;
-			fundamental_type = getNodeAttribute( node, "name" );
+			case "Struct":
+			case "Class":
+				is_primitive = false;
+				fundamental_type = getNodeAttribute( node, "name" );
+			break;
+				
+			case "FundamentalType":
+				is_primitive = true;
+				fundamental_type = getNodeAttribute( node, "name" );
 			break;
 			
-		case "FundamentalType":
-			is_primitive = true;
-			fundamental_type = getNodeAttribute( node, "name" );
+			case "PointerType":
+				scope fundamental_node = getFundamentalTypeNode( node );
+				assert( fundamental_node != null );
+				reference_type ~= ReferenceType.POINTER;
+				parse( fundamental_node );
 			break;
-		
-		case "PointerType":
-			scope fundamental_node = getFundamentalTypeNode( node );
-			assert( fundamental_node != null );
-			reference_type ~= ReferenceType.POINTER;
-			parse( fundamental_node );
+				
+			case "ReferenceType":
+				scope fundamental_node = getFundamentalTypeNode( node );
+				assert( fundamental_node != null );
+				reference_type ~= ReferenceType.REFERENCE;
+				parse( fundamental_node );
 			break;
-			
-		case "ReferenceType":
-			scope fundamental_node = getFundamentalTypeNode( node );
-			assert( fundamental_node != null );
-			reference_type ~= ReferenceType.REFERENCE;
-			parse( fundamental_node );
+				
+			case "CvQualifiedType":
+				// I think this XML node might be for more than just const'ness, so let's verify that this node is for const
+				assert( hasAttributeAndEqualTo( node, "const", "1" ), "I don't know how to handle anything but const here!" );
+				
+				scope fundamental_node = getFundamentalTypeNode( node );
+				assert( fundamental_node != null );
+				reference_type ~= ReferenceType.CONST;
+				parse( fundamental_node );
 			break;
-			
-		case "CvQualifiedType":
-			// I think this XML node might be for more than just const'ness, so let's verify that this node is for const
-			assert( hasAttributeAndEqualTo( node, "const", "1" ), "I don't know how to handle anything but const here!" );
-			
-			scope fundamental_node = getFundamentalTypeNode( node );
-			assert( fundamental_node != null );
-			reference_type ~= ReferenceType.CONST;
-			parse( fundamental_node );
+				
+			case "Typedef":
+				// TODO: Obey this in the future
+				scope fundamental_node = getFundamentalTypeNode( node );
+				parse( fundamental_node );
 			break;
-			
-		default:
-			assert( false, "Unrecognized variable type: " ~ node.name ~ ". Id is " ~ getNodeAttribute( node, "id" ) );
+				
+			default:
+				assert( false, "Unrecognized variable type: " ~ node.name ~ ". Id is " ~ getNodeAttribute( node, "id" ) );
 			break;
 		}
 	}

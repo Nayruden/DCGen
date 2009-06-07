@@ -9,17 +9,19 @@ alias Doc.Node Node;
 const overrideAttribute = `gccxml(override)`;
 const inheritAttribute = `gccxml(inherit)`;
 
-struct Config {
-	char[]   input_filepath;
-	char[]   output_directory;
-	char[][] include_classes;   // Array of strings specifying what classes to include
-	bool     generate_wrappers; // Generate wrappers for virtual functions?
-}
-
 enum Language {
 	CPP,
 	C,
 	D
+}
+
+struct Config {
+	char[]   input_filepath;
+	Language mode;
+	char[]   output_directory;
+	char[][] include_classes;   // Array of strings specifying what classes to include
+	bool     include_globals;
+	bool     generate_wrappers; // Generate wrappers for virtual functions?
 }
 
 enum Access {

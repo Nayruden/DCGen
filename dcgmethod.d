@@ -10,7 +10,8 @@ import dcgprocess;
 
 // This has to be global due to a bug in the compiler
 private enum MethodType {
-	NORMAL,
+	GLOBAL,
+	METHOD,
 	CONSTRUCTOR,
 	DESTRUCTOR
 }
@@ -40,23 +41,28 @@ class DCGMethod
 		this.method_node = method_node;
 		this.config = config;
 		
-		class_name = getNodeAttribute( class_node, "name" );
-		method_name = getNodeAttribute( method_node, "name" );
-		method_name_mangled = getNodeAttribute( method_node, "mangled" );
-		// TODO: Is there really a good reason for this being marked INTERNAL?
-		method_name_mangled = Util.substitute( method_name_mangled, "*INTERNAL*", cast (char[]) null );
-		method_name_mangled = Util.trim( method_name_mangled );
-		
 		if ( method_node.name == "Constructor" )
 			method_type = MethodType.CONSTRUCTOR;
-		else if ( method_node.name == "Destructor" ){
+		else if ( method_node.name == "Destructor" )
 			method_type = MethodType.DESTRUCTOR;
-		}
+		else if ( method_node.name == "Function" )
+			method_type = MethodType.GLOBAL;
 		else {
-			method_type = MethodType.NORMAL;
+			method_type = MethodType.METHOD;
 			scope return_type_node = getNodeByID( method_node.document, getNodeAttribute( method_node, "returns" ) );
 			return_type = new DCGVarType( return_type_node, config );
 		}
+		
+		method_name = getNodeAttribute( method_node, "name" );
+		if ( method_type != MethodType.GLOBAL ) {
+			class_name = getNodeAttribute( class_node, "name" );
+			method_name_mangled = getNodeAttribute( method_node, "mangled" );
+			// TODO: Is there really a good reason for this being marked INTERNAL?
+			method_name_mangled = Util.substitute( method_name_mangled, "*INTERNAL*", cast (char[]) null );
+			method_name_mangled = Util.trim( method_name_mangled );
+		}
+		else
+			method_name_mangled = method_name;	
 		
 		foreach ( child; method_node.children ) {
 			if ( child == null || child.name == null )
@@ -67,8 +73,6 @@ class DCGMethod
 			
 			arg_types ~= method_type;
 		}
-		
-		
 		
 		if ( hasAttributeAndEqualTo( method_node, "virtual", "1" ) ) {
 			is_virtual = true;
@@ -158,7 +162,7 @@ class DCGMethod
 	
 	private char[] getReturnType( Language language, DCGVarType typ=null )
 	{
-		if ( method_type != MethodType.NORMAL ) // Constructor and destructor have no return
+		if ( method_type != MethodType.METHOD ) // Constructor and destructor have no return
 			return "";
 		
 		if ( typ is null )
@@ -167,7 +171,7 @@ class DCGMethod
 		return typ.layout( language );
 	}
 	
-//////////////////////////////cppInterfaceDefinition//////////////////
+//////////////////////////////interfaceDefinition//////////////////
 
 	// 0 = Class name
 	// 1 = Function name unmangled
@@ -229,22 +233,22 @@ class DCGMethod
 	// 0 = Class name
 	// 1 = Function name mangled
 	// 2 = Return type
-	// 3 = Arg names and types w/comma
-	// 4 = Arg names and types w/o comma
+	// 3 = Arg names and types
 	private const c_interface_declaration = 
-`	{2}dcgen_{1}( C{0} cPtr{3} );`;
+`	{2}dcgen_{1}( {3} );`;
 	
 	private const c_interface_declaration_constructor =
-`	C{0} dcgen_{1}_create( {4} );`;
+`	C{0} dcgen_{1}_create( {3} );`;
 	
 	private const c_interface_declaration_destructor =
-`	void dcgen_{1}_destroy( C{0} cPtr );`;
+`	void dcgen_{1}_destroy( {3} );`;
 	
 	char[] interfaceDeclaration( Language language = Language.C )
 	{
 		assert( language == Language.C, "I don't know how to create interface declarations for anything but C" );
 		
-		scope arg_names_and_types = Util.join( getArgNamesAndTypes( language ), ", " );
+		scope processed_arg_names_arr = getArgNames();
+		scope processed_arg_types_arr = arg_types.dup;
 		
 		scope char[] format = c_interface_declaration;
 		if ( method_type == MethodType.CONSTRUCTOR )
@@ -252,11 +256,19 @@ class DCGMethod
 		else if ( method_type == MethodType.DESTRUCTOR )
 			format = c_interface_declaration_destructor;
 		
+		// We need to pass the pointer to the class in case of methods or destructors...
+		if ( method_type == MethodType.METHOD || method_type == MethodType.DESTRUCTOR ) {
+			processed_arg_types_arr = new DCGVarType( [ ReferenceType.POINTER ], class_name, false ) ~ processed_arg_types_arr;
+			processed_arg_names_arr = ["cPtr"] ~ processed_arg_names_arr;
+		}
+		
+		scope processed_arg_types = getArgTypes( language, processed_arg_types_arr );
+		scope arg_names_and_types = Util.join( combineArgNamesAndTypes( processed_arg_types, processed_arg_names_arr ), ", " );
+		
 		return Format( format,
 			class_name,
 			method_name_mangled,
 			getReturnType( language ),
-			prefixComma( arg_names_and_types ),
 			arg_names_and_types
 		);
 	}
@@ -314,7 +326,7 @@ class DCGMethod
 		for ( int i=0; i < processed_arg_types_arr.length; i++ )
 			preprocessing ~= DCGProcess.convert( language, Language.C, processed_arg_types_arr[ i ], processed_arg_names_arr[ i ] );
 		char[] return_value_name = "return_value";
-		if ( method_type == MethodType.NORMAL ) { // No return on constructor and destructor
+		if ( method_type == MethodType.METHOD ) { // No return on constructor and destructor
 			auto processed_return_type = return_type;
 			postprocessing ~= DCGProcess.convert( Language.C, language, processed_return_type, return_value_name );
 			processed_return_type_str = getReturnType( language, processed_return_type );
